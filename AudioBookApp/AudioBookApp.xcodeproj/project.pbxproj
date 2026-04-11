@@ -13,6 +13,12 @@
 		AA000004 /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000004; };
 		AA000005 /* PageImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000005; };
 		AA000006 /* PlayerControlsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000006; };
+		AA000007 /* LibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000007; };
+		AA000008 /* LibraryManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000008; };
+		AA000009 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000009; };
+		AA000010 /* BookCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010; };
+		AA000011 /* AddBookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011; };
+		AA000012 /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +28,12 @@
 		AB000004 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
 		AB000005 /* PageImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageImageView.swift; sourceTree = "<group>"; };
 		AB000006 /* PlayerControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlsView.swift; sourceTree = "<group>"; };
+		AB000007 /* LibraryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryModel.swift; sourceTree = "<group>"; };
+		AB000008 /* LibraryManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryManager.swift; sourceTree = "<group>"; };
+		AB000009 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		AB000010 /* BookCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCardView.swift; sourceTree = "<group>"; };
+		AB000011 /* AddBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddBookView.swift; sourceTree = "<group>"; };
+		AB000012 /* ViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerView.swift; sourceTree = "<group>"; };
 		AC000001 /* AudioBookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioBookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC000002 /* AudioBookApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AudioBookApp.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -71,6 +83,10 @@
 				AB000002 /* ContentView.swift */,
 				AB000005 /* PageImageView.swift */,
 				AB000006 /* PlayerControlsView.swift */,
+				AB000009 /* LibraryView.swift */,
+				AB000010 /* BookCardView.swift */,
+				AB000011 /* AddBookView.swift */,
+				AB000012 /* ViewerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -79,6 +95,8 @@
 			isa = PBXGroup;
 			children = (
 				AB000003 /* BookModel.swift */,
+				AB000007 /* LibraryModel.swift */,
+				AB000008 /* LibraryManager.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -149,6 +167,12 @@
 				AA000004 /* AudioPlayerManager.swift in Sources */,
 				AA000005 /* PageImageView.swift in Sources */,
 				AA000006 /* PlayerControlsView.swift in Sources */,
+				AA000007 /* LibraryModel.swift in Sources */,
+				AA000008 /* LibraryManager.swift in Sources */,
+				AA000009 /* LibraryView.swift in Sources */,
+				AA000010 /* BookCardView.swift in Sources */,
+				AA000011 /* AddBookView.swift in Sources */,
+				AA000012 /* ViewerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

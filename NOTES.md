@@ -180,3 +180,16 @@ python viewer/app.py --book book.json
 - キーボードショートカット（スペースで再生/一時停止など）
 - 再生速度変更
 - 縦書き/横書きで異なるハイライトスタイル
+
+## Phase 4b: TODO / 課題メモ
+
+### OCR 処理中のプログレス表示（優先度: 中）
+
+- 本の追加時に OCR が長時間かかる（大量ページだと数分〜十数分）
+- 現在は「OCR 処理中...」という静的テキストのみでフリーズしているか分からない
+- 改善案:
+  - `ocr_process.py` がページ毎に進捗を標準出力する（`[INFO] page 1/48 done` など）
+  - `LibraryManager.addBook` の `onProgress` コールバックで受け取り `AddBookView` に表示
+  - プログレスバー（`ProgressView(value: progress, total: 1.0)`）を追加
+  - または処理済みページ数をカウントして「12 / 48ページ処理中」と表示
+- 参考: `xcodebuild -project ...` の出力と同様に行単位でストリーミング受信できる
