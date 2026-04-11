@@ -1,0 +1,36 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# ndlocr-lite (cloned repo, large model files)
+ndlocr-lite/
+
+# Book data (copyrighted content)
+pages/
+audio/
+ocr_output/
+ocr_output_scan/
+book.json
+library/
+
+# Original images
+*.jpg
+*.jpeg
+*.png
+*.tiff
+*.jp2
+!scripts/**
+!viewer/**
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary
+*.aiff
+/var/
