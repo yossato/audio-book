@@ -7,12 +7,12 @@ __pycache__/
 # ndlocr-lite is managed as a git submodule (not ignored)
 
 # Book data (copyrighted content)
-pages/
-audio/
-ocr_output/
-ocr_output_scan/
-book.json
-library/
+/pages/
+/audio/
+/ocr_output/
+/ocr_output_scan/
+/book.json
+/library/
 
 # Original images
 *.jpg
