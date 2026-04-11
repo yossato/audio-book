@@ -4,8 +4,7 @@ __pycache__/
 *.pyc
 *.pyo
 
-# ndlocr-lite (cloned repo, large model files)
-ndlocr-lite/
+# ndlocr-lite is managed as a git submodule (not ignored)
 
 # Book data (copyrighted content)
 pages/
