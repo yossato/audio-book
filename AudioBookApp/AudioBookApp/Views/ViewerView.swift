@@ -118,14 +118,13 @@ struct ViewerView: View {
     private func loadPageAudio() {
         guard let book else { return }
         let page = book.pages[currentPageIndex]
-        if let audioPath = page.audioPath {
-            let url = URL(fileURLWithPath: audioPath)
-            audioManager.loadAudio(url: url, blocks: page.blocks)
-            audioManager.updateNowPlaying(
-                title: book.title,
-                pageInfo: "ページ \(currentPageIndex + 1) / \(book.pages.count)"
-            )
-        }
+        // audioPath が nil またはファイルが存在しない場合は speech mode にフォールバック
+        let url = page.audioPath.map { URL(fileURLWithPath: $0) }
+        audioManager.loadAudio(url: url, blocks: page.blocks)
+        audioManager.updateNowPlaying(
+            title: book.title,
+            pageInfo: "ページ \(currentPageIndex + 1) / \(book.pages.count)"
+        )
     }
 
     // MARK: - Reading Position

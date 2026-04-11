@@ -236,22 +236,7 @@ final class LibraryManager {
                 return
             }
 
-            // 4. TTS
-            await MainActor.run { self?.updateBookStatus(id: bookId, status: .ttsProcessing) }
-            onProgress("TTS 音声生成中...")
-            let ttsScript = "\(scriptsDirectory)/tts_process.py"
-            let ttsOK = await runProcessAsync(
-                executablePath: pythonExecutable,
-                arguments: [ttsScript, "--book", bookJSONPath.path],
-                onOutput: onProgress
-            )
-            guard ttsOK else {
-                await MainActor.run { self?.updateBookStatus(id: bookId, status: .error); self?.saveLibrary() }
-                onComplete(false, "TTS 処理に失敗しました")
-                return
-            }
-
-            // 5. カバー生成 + ページ数更新
+            // 4. カバー生成 + ページ数更新（TTS はスキップ）
             await MainActor.run {
                 guard let self else { return }
                 self.generateCover(bookId: bookId, safeTitle: safeTitle,
