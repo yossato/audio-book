@@ -91,7 +91,8 @@ struct ViewerView: View {
                 pageIndex: currentPageIndex,
                 totalPages: book.pages.count,
                 onPrevPage: { goToPage(currentPageIndex - 1) },
-                onNextPage: { goToPage(currentPageIndex + 1) }
+                onNextPage: { goToPage(currentPageIndex + 1) },
+                onPageChange: { goToPage($0) }
             )
         }
         .frame(minWidth: 800, minHeight: 600)

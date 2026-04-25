@@ -6,23 +6,38 @@ struct PlayerControlsView: View {
     let totalPages: Int
     var onPrevPage: () -> Void
     var onNextPage: () -> Void
+    var onPageChange: (Int) -> Void
+
+    @State private var sliderPage: Double = 0
+    @State private var isDragging = false
 
     private let speeds: [Float] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     var body: some View {
         VStack(spacing: 8) {
-            // シークバー
+            // ページスライダー（Kindle 風）
             HStack(spacing: 8) {
-                Slider(
-                    value: Binding(
-                        get: { audioManager.duration > 0 ? audioManager.currentTime / audioManager.duration : 0 },
-                        set: { audioManager.seek(to: $0 * audioManager.duration) }
-                    ),
-                    in: 0...1
-                )
-                Text("\(formatTime(audioManager.currentTime)) / \(formatTime(audioManager.duration))")
+                Text("\(displayPage)")
                     .font(.system(.body, design: .monospaced))
                     .foregroundColor(.secondary)
+                    .frame(width: 40, alignment: .trailing)
+
+                Slider(
+                    value: $sliderPage,
+                    in: 0...max(1, Double(totalPages - 1)),
+                    step: 1,
+                    onEditingChanged: { editing in
+                        isDragging = editing
+                        if !editing {
+                            onPageChange(Int(sliderPage))
+                        }
+                    }
+                )
+
+                Text("/ \(totalPages)")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .frame(width: 50, alignment: .leading)
             }
 
             // コントロールボタン
@@ -60,18 +75,20 @@ struct PlayerControlsView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(width: 80)
-
-                Text("ページ \(pageIndex + 1) / \(totalPages)")
-                    .foregroundColor(.secondary)
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
+        .onAppear { sliderPage = Double(pageIndex) }
+        .onChange(of: pageIndex) { _, newValue in
+            if !isDragging {
+                sliderPage = Double(newValue)
+            }
+        }
     }
 
-    private func formatTime(_ seconds: Double) -> String {
-        let m = Int(seconds) / 60
-        let s = Int(seconds) % 60
-        return String(format: "%02d:%02d", m, s)
+    /// ドラッグ中はスライダー値、それ以外は実際のページを表示
+    private var displayPage: Int {
+        isDragging ? Int(sliderPage) + 1 : pageIndex + 1
     }
 }
