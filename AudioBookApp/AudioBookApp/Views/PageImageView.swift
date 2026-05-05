@@ -29,23 +29,30 @@ struct PageImageView: View {
                     // バウンディングボックスオーバーレイ
                     ForEach(blocks) { block in
                         let rect = scaledRect(block: block, scale: scale)
+                        let isActive = block.id == activeBlockId
+                        let isFootnote = !block.isReadable
                         Rectangle()
-                            .fill(block.id == activeBlockId
+                            .fill(isActive
                                   ? Color.yellow.opacity(0.3)
-                                  : Color.clear)
+                                  : isFootnote
+                                    ? Color.gray.opacity(0.15)
+                                    : Color.clear)
                             .overlay(
                                 Rectangle()
                                     .stroke(
-                                        block.id == activeBlockId
+                                        isActive
                                         ? Color.orange
-                                        : Color.blue.opacity(0.25),
-                                        lineWidth: block.id == activeBlockId ? 2 : 1
+                                        : isFootnote
+                                          ? Color.gray.opacity(0.3)
+                                          : Color.blue.opacity(0.25),
+                                        lineWidth: isActive ? 2 : 1
                                     )
                             )
                             .contentShape(Rectangle())
                             .frame(width: rect.width, height: rect.height)
                             .offset(x: rect.minX, y: rect.minY)
                             .onTapGesture {
+                                guard block.isReadable else { return }
                                 onBlockTapped?(block)
                             }
                     }

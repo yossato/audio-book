@@ -12,6 +12,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -39,14 +40,40 @@ def run_ocr(input_dir: Path, viz: bool = False) -> Path:
     return tmp_dir
 
 
+def parse_xml_types(xml_file: Path) -> dict[str, str]:
+    """XML ファイルからテキスト → TYPE のマッピングを取得する。
+
+    JSON の id と XML の ORDER は必ずしも一致しないため、
+    テキスト内容（STRING 属性の先頭部分）で照合する。
+    """
+    type_map = {}
+    try:
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        for line in root.iter("LINE"):
+            line_type = line.get("TYPE")
+            string = line.get("STRING")
+            if line_type is not None and string is not None:
+                # テキストの先頭30文字をキーとして使う
+                key = string[:30]
+                type_map[key] = line_type
+    except (ET.ParseError, FileNotFoundError):
+        pass
+    return type_map
+
+
 def convert_to_book_json(ocr_output_dir: Path, input_dir: Path, title: str = "") -> dict:
-    """ndlocr-lite の JSON 出力を book.json 形式に変換する"""
+    """ndlocr-lite の JSON + XML 出力を book.json 形式に変換する"""
     pages = []
 
     json_files = sorted(ocr_output_dir.glob("*.json"))
     for page_num, json_file in enumerate(json_files, start=1):
         with open(json_file, encoding="utf-8") as f:
             ocr_data = json.load(f)
+
+        # 対応する XML ファイルから TYPE 情報を取得
+        xml_file = json_file.with_suffix(".xml")
+        type_map = parse_xml_types(xml_file)
 
         image_name = ocr_data["imginfo"]["img_name"]
         image_path = str(input_dir / image_name)
@@ -61,12 +88,18 @@ def convert_to_book_json(ocr_output_dir: Path, input_dir: Path, title: str = "")
             x2 = bb[3][0]
             y2 = bb[3][1]
 
+            block_id = item["id"]
+            # テキスト先頭30文字で XML の TYPE を照合
+            text_key = item["text"][:30]
+            block_type = type_map.get(text_key, "本文")
+
             blocks.append({
-                "id": item["id"],
+                "id": block_id,
                 "text": item["text"],
                 "bbox": [x1, y1, x2, y2],
                 "confidence": item.get("confidence", 0),
                 "is_vertical": item.get("isVertical", "false") == "true",
+                "type": block_type,
                 "audio_start": None,  # TTS処理後に設定
                 "audio_end": None,
             })

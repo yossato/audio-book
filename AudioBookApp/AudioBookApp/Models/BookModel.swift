@@ -6,14 +6,32 @@ struct TextBlock: Codable, Identifiable {
     let bbox: [Double]
     let confidence: Double
     let isVertical: Bool
+    let type: String
     var audioStart: Double?
     var audioEnd: Double?
 
+    /// 本文として読み上げるべきブロックかどうか
+    var isReadable: Bool {
+        type == "本文" || type == "タイトル本文"
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id, text, bbox, confidence
+        case id, text, bbox, confidence, type
         case isVertical = "is_vertical"
         case audioStart = "audio_start"
         case audioEnd = "audio_end"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        bbox = try container.decode([Double].self, forKey: .bbox)
+        confidence = try container.decode(Double.self, forKey: .confidence)
+        isVertical = try container.decode(Bool.self, forKey: .isVertical)
+        type = try container.decodeIfPresent(String.self, forKey: .type) ?? "本文"
+        audioStart = try container.decodeIfPresent(Double.self, forKey: .audioStart)
+        audioEnd = try container.decodeIfPresent(Double.self, forKey: .audioEnd)
     }
 }
 

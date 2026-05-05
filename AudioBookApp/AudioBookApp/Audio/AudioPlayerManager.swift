@@ -62,13 +62,14 @@ final class AudioPlayerManager: NSObject {
         } else {
             // ----- 音声合成モード -----
             isSpeechMode = true
-            speechBlocks = blocks
+            // 割注・ルビ・ノンブル等をスキップし、本文とタイトルのみ読み上げる
+            speechBlocks = blocks.filter { $0.isReadable }
             speechUtterances = []
             utteranceBlockIds = []
             currentUtteranceIndex = 0
             currentTime = 0
             activeBlockId = -1
-            duration = estimateSpeechDuration(blocks: blocks, rate: playbackRate)
+            duration = estimateSpeechDuration(blocks: speechBlocks, rate: playbackRate)
             synthesizer = AVSpeechSynthesizer()
             synthesizer?.delegate = self
         }
