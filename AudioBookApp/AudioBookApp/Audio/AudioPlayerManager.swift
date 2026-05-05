@@ -28,6 +28,18 @@ final class AudioPlayerManager: NSObject {
     private var speechUtterances: [AVSpeechUtterance] = []
     private var utteranceBlockIds: [Int] = []
     private var currentUtteranceIndex = 0
+    private var speechGroups: [SpeechGroup] = []
+    private var groupStartOffset: Int = 0
+
+    private struct BlockRange {
+        let startCharIndex: Int  // UTF-16 offset within group.text
+        let blockId: Int
+    }
+
+    private struct SpeechGroup {
+        let text: String
+        let blockRanges: [BlockRange]  // sorted ascending by startCharIndex
+    }
 
     // MARK: - Shared timer
 
@@ -62,8 +74,8 @@ final class AudioPlayerManager: NSObject {
         } else {
             // ----- 音声合成モード -----
             isSpeechMode = true
-            // 割注・ルビ・ノンブル等をスキップし、本文とタイトルのみ読み上げる
             speechBlocks = blocks.filter { $0.isReadable }
+            speechGroups = buildSpeechGroups(from: speechBlocks)
             speechUtterances = []
             utteranceBlockIds = []
             currentUtteranceIndex = 0
@@ -136,7 +148,7 @@ final class AudioPlayerManager: NSObject {
             let charsPerSec = estimatedCharsPerSecond(rate: playbackRate)
             var targetIdx = 0
             for (i, block) in speechBlocks.enumerated() {
-                let blockDuration = Double(block.text.count) / max(1, charsPerSec)
+                let blockDuration = Double(preprocessBlockText(block.text).count) / max(1, charsPerSec)
                 if accumulated + blockDuration > time {
                     targetIdx = i
                     break
@@ -144,13 +156,15 @@ final class AudioPlayerManager: NSObject {
                 accumulated += blockDuration
                 targetIdx = i + 1
             }
+            let safeIdx = min(targetIdx, speechBlocks.count - 1)
             let wasPlaying = isPlaying
             synthesizer?.stopSpeaking(at: .immediate)
             speechUtterances = []
             utteranceBlockIds = []
-            currentUtteranceIndex = min(targetIdx, speechBlocks.count - 1)
+            speechGroups = buildSpeechGroups(from: Array(speechBlocks[safeIdx...]))
+            currentUtteranceIndex = 0
             currentTime = time
-            if wasPlaying { speakFrom(index: currentUtteranceIndex) }
+            if wasPlaying { speakFrom(index: 0) }
         } else {
             player?.currentTime = time
             currentTime = time
@@ -161,13 +175,14 @@ final class AudioPlayerManager: NSObject {
 
     func seekToBlock(_ block: TextBlock) {
         if isSpeechMode {
-            guard let idx = speechBlocks.firstIndex(where: { $0.id == block.id }) else { return }
-            let wasPlaying = isPlaying
+            guard let blockIdx = speechBlocks.firstIndex(where: { $0.id == block.id }) else { return }
             synthesizer?.stopSpeaking(at: .immediate)
             speechUtterances = []
             utteranceBlockIds = []
-            currentUtteranceIndex = idx
-            if wasPlaying { speakFrom(index: idx) } else { speakFrom(index: idx) }
+            // クリックされたブロックから新たにグループを再構築して読み始める
+            speechGroups = buildSpeechGroups(from: Array(speechBlocks[blockIdx...]))
+            currentUtteranceIndex = 0
+            speakFrom(index: 0)
         } else {
             guard let start = block.audioStart else { return }
             seek(to: start)
@@ -210,16 +225,21 @@ final class AudioPlayerManager: NSObject {
                                 min(AVSpeechUtteranceMaximumSpeechRate,
                                     AVSpeechUtteranceDefaultSpeechRate * playbackRate))
 
-        let startIdx = max(0, min(index, speechBlocks.count - 1))
-        for block in speechBlocks[startIdx...] {
-            let text = block.text.trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else { continue }
-            let u = AVSpeechUtterance(string: text)
+        guard !speechGroups.isEmpty else {
+            isPlaying = false
+            onPlaybackFinished?()
+            return
+        }
+        let startIdx = max(0, min(index, speechGroups.count - 1))
+        groupStartOffset = startIdx
+        for group in speechGroups[startIdx...] {
+            guard !group.text.isEmpty else { continue }
+            let u = AVSpeechUtterance(string: group.text)
             u.voice = voice
             u.rate = utteranceRate
             u.postUtteranceDelay = 0.05
             speechUtterances.append(u)
-            utteranceBlockIds.append(block.id)
+            utteranceBlockIds.append(group.blockRanges.first?.blockId ?? -1)
             newSynth.speak(u)
         }
 
@@ -233,6 +253,58 @@ final class AudioPlayerManager: NSObject {
         }
     }
 
+    // MARK: - Text Preprocessing
+
+    /// ブロックテキストから改行を除去する。句読点（。！？）でグループ分割するため
+    /// 改行は必要なく、残すと AVSpeechSynthesizer が不自然に止まる原因になる。
+    private func preprocessBlockText(_ text: String) -> String {
+        var result = ""
+        for char in text where char != "\n" && char != "\r" {
+            result.append(char)
+        }
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 読み上げブロックを句読点単位のグループに分割する。
+    /// 各グループはブロックのUTF-16文字位置情報を持ち、再生中のハイライト追跡に使用する。
+    private func buildSpeechGroups(from blocks: [TextBlock]) -> [SpeechGroup] {
+        var groups: [SpeechGroup] = []
+        var currentText = ""
+        var currentUtf16Count = 0
+        var currentBlockRanges: [BlockRange] = []
+        let sentenceEnders: Set<Character> = ["。", "！", "？"]
+
+        for block in blocks {
+            let processed = preprocessBlockText(block.text)
+            guard !processed.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+
+            var blockStarted = false
+            for char in processed {
+                if !blockStarted {
+                    // このブロックのテキストが始まるUTF-16位置を記録
+                    currentBlockRanges.append(BlockRange(startCharIndex: currentUtf16Count, blockId: block.id))
+                    blockStarted = true
+                }
+                currentText.append(char)
+                currentUtf16Count += char.utf16.count
+                if sentenceEnders.contains(char) {
+                    if !currentText.trimmingCharacters(in: .whitespaces).isEmpty {
+                        groups.append(SpeechGroup(text: currentText, blockRanges: currentBlockRanges))
+                    }
+                    currentText = ""
+                    currentUtf16Count = 0
+                    currentBlockRanges = []
+                    blockStarted = false
+                }
+            }
+        }
+
+        if !currentText.trimmingCharacters(in: .whitespaces).isEmpty {
+            groups.append(SpeechGroup(text: currentText, blockRanges: currentBlockRanges))
+        }
+        return groups
+    }
+
     // MARK: - Duration Estimation
 
     private func estimatedCharsPerSecond(rate: Float) -> Double {
@@ -241,7 +313,7 @@ final class AudioPlayerManager: NSObject {
     }
 
     private func estimateSpeechDuration(blocks: [TextBlock], rate: Float) -> Double {
-        let totalChars = blocks.reduce(0) { $0 + $1.text.count }
+        let totalChars = blocks.reduce(0) { $0 + preprocessBlockText($1.text).count }
         return Double(totalChars) / max(1, estimatedCharsPerSecond(rate: rate))
     }
 
@@ -366,6 +438,34 @@ extension AudioPlayerManager: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
                                         didCancel utterance: AVSpeechUtterance) {
         // stop() で処理済み
+    }
+
+    /// 発話中の文字範囲が変わるたびに呼ばれる。ブロックのハイライト位置を更新する。
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
+                                        willSpeakRangeOfSpeechString characterRange: NSRange,
+                                        utterance: AVSpeechUtterance) {
+        let oid = ObjectIdentifier(utterance)
+        let charStart = characterRange.location
+        Task { @MainActor [weak self] in
+            guard let self, self.isSpeechMode else { return }
+            guard let utteranceIdx = self.speechUtterances.firstIndex(where: { ObjectIdentifier($0) == oid }) else { return }
+            let groupIdx = utteranceIdx + self.groupStartOffset
+            guard groupIdx < self.speechGroups.count else { return }
+            let group = self.speechGroups[groupIdx]
+
+            // charStart以下で最大のstartCharIndexを持つブロックが現在のブロック
+            var activeId = group.blockRanges.first?.blockId ?? -1
+            for br in group.blockRanges {
+                if br.startCharIndex <= charStart {
+                    activeId = br.blockId
+                } else {
+                    break
+                }
+            }
+            if self.activeBlockId != activeId {
+                self.activeBlockId = activeId
+            }
+        }
     }
 }
 
