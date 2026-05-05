@@ -12,6 +12,7 @@ struct ViewerView: View {
     @State private var book: Book?
     @State private var currentPageIndex = 0
     @State private var audioManager = AudioPlayerManager()
+    @State private var showSettings = false
 
     var body: some View {
         Group {
@@ -52,25 +53,41 @@ struct ViewerView: View {
     private func viewerContent(book: Book) -> some View {
         VStack(spacing: 0) {
             // タイトルバー（ライブラリから開いた場合のみ「戻る」を表示）
-            if onClose != nil {
-                HStack {
+            HStack {
+                if onClose != nil {
                     Button {
                         onClose?()
                     } label: {
                         Label("ライブラリ", systemImage: "chevron.left")
                     }
                     .buttonStyle(.borderless)
-                    Spacer()
-                    Text(book.title)
-                        .fontWeight(.semibold)
-                    Spacer()
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.bar)
-
-                Divider()
+                Spacer()
+                Text(book.title)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button {
+                    showSettings.toggle()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.borderless)
+                .popover(isPresented: $showSettings) {
+                    ReadingSettingsView()
+                        .frame(width: 350, height: 450)
+                }
+                .onChange(of: showSettings) { _, isShowing in
+                    if !isShowing {
+                        // 設定画面を閉じたら現在ページの音声を再読み込み
+                        loadPageAudio()
+                    }
+                }
             }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.bar)
+
+            Divider()
 
             // ページ画像 + バウンディングボックス
             let page = book.pages[currentPageIndex]

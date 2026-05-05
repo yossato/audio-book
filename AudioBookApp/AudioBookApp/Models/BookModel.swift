@@ -10,9 +10,9 @@ struct TextBlock: Codable, Identifiable {
     var audioStart: Double?
     var audioEnd: Double?
 
-    /// 本文として読み上げるべきブロックかどうか
-    var isReadable: Bool {
-        type == "本文" || type == "タイトル本文"
+    /// 本文として読み上げるべきブロックかどうか（設定に基づく）
+    @MainActor var isReadable: Bool {
+        ReadingSettings.shared.shouldRead(block: self)
     }
 
     enum CodingKeys: String, CodingKey {

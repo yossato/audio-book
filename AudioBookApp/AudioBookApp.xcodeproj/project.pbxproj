@@ -19,6 +19,8 @@
 		AA000010 /* BookCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010; };
 		AA000011 /* AddBookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011; };
 		AA000012 /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012; };
+		AA000013 /* ReadingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000013; };
+		AA000014 /* ReadingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +36,8 @@
 		AB000010 /* BookCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookCardView.swift; sourceTree = "<group>"; };
 		AB000011 /* AddBookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddBookView.swift; sourceTree = "<group>"; };
 		AB000012 /* ViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerView.swift; sourceTree = "<group>"; };
+		AB000013 /* ReadingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSettings.swift; sourceTree = "<group>"; };
+		AB000014 /* ReadingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSettingsView.swift; sourceTree = "<group>"; };
 		AC000001 /* AudioBookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioBookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC000002 /* AudioBookApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AudioBookApp.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -87,6 +91,7 @@
 				AB000010 /* BookCardView.swift */,
 				AB000011 /* AddBookView.swift */,
 				AB000012 /* ViewerView.swift */,
+				AB000014 /* ReadingSettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -97,6 +102,7 @@
 				AB000003 /* BookModel.swift */,
 				AB000007 /* LibraryModel.swift */,
 				AB000008 /* LibraryManager.swift */,
+				AB000013 /* ReadingSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -173,6 +179,8 @@
 				AA000010 /* BookCardView.swift in Sources */,
 				AA000011 /* AddBookView.swift in Sources */,
 				AA000012 /* ViewerView.swift in Sources */,
+				AA000013 /* ReadingSettings.swift in Sources */,
+				AA000014 /* ReadingSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
