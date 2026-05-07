@@ -1,6 +1,9 @@
 # Python
 venv/
 __pycache__/
+
+# 作業用ディレクトリ
+old/
 *.pyc
 *.pyo
 
