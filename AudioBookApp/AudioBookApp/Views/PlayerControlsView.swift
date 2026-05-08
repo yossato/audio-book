@@ -50,8 +50,14 @@ struct PlayerControlsView: View {
                 .keyboardShortcut(.leftArrow, modifiers: [])
 
                 Button(action: { audioManager.togglePlayPause() }) {
-                    Image(systemName: audioManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 36))
+                    if audioManager.isIrodoriGenerating {
+                        ProgressView()
+                            .controlSize(.regular)
+                            .frame(width: 36, height: 36)
+                    } else {
+                        Image(systemName: audioManager.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 36))
+                    }
                 }
                 .keyboardShortcut(.space, modifiers: [])
 

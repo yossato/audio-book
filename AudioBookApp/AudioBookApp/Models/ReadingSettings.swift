@@ -1,9 +1,37 @@
 import Foundation
 
+/// TTS エンジンの種類
+enum TTSEngine: String, CaseIterable {
+    case system = "system"      // AVSpeechSynthesizer
+    case irodori = "irodori"    // mlx-audio Irodori TTS サーバー
+
+    var displayName: String {
+        switch self {
+        case .system: return "システム音声 (say)"
+        case .irodori: return "Irodori TTS (MLX)"
+        }
+    }
+}
+
 /// 読み上げ設定を管理する。設定は UserDefaults に永続化される。
 @Observable @MainActor
 final class ReadingSettings {
     static let shared = ReadingSettings()
+
+    /// TTS エンジンの選択
+    var ttsEngine: TTSEngine {
+        didSet { save() }
+    }
+
+    /// Irodori TTS サーバーの URL
+    var irodoriServerURL: String {
+        didSet { save() }
+    }
+
+    /// Irodori TTS の Python venv パス
+    var irodoriVenvPath: String {
+        didSet { save() }
+    }
 
     /// TYPE 別のスキップ設定（true = 読み飛ばす）
     var skippedTypes: Set<String> {
@@ -37,6 +65,9 @@ final class ReadingSettings {
 
     private let skippedTypesKey = "ReadingSettings.skippedTypes"
     private let skipOCRErrorsKey = "ReadingSettings.skipOCRErrors"
+    private let ttsEngineKey = "ReadingSettings.ttsEngine"
+    private let irodoriServerURLKey = "ReadingSettings.irodoriServerURL"
+    private let irodoriVenvPathKey = "ReadingSettings.irodoriVenvPath"
 
     private init() {
         if let saved = UserDefaults.standard.stringArray(forKey: skippedTypesKey) {
@@ -46,11 +77,23 @@ final class ReadingSettings {
             skippedTypes = ["割注", "キャプション", "柱", "ノンブル", "ルビ", "図版", "広告文字"]
         }
         skipOCRErrors = UserDefaults.standard.object(forKey: skipOCRErrorsKey) as? Bool ?? true
+
+        if let engineRaw = UserDefaults.standard.string(forKey: ttsEngineKey),
+           let engine = TTSEngine(rawValue: engineRaw) {
+            ttsEngine = engine
+        } else {
+            ttsEngine = .system
+        }
+        irodoriServerURL = UserDefaults.standard.string(forKey: irodoriServerURLKey) ?? "http://localhost:8000"
+        irodoriVenvPath = UserDefaults.standard.string(forKey: irodoriVenvPathKey) ?? ""
     }
 
     private func save() {
         UserDefaults.standard.set(Array(skippedTypes), forKey: skippedTypesKey)
         UserDefaults.standard.set(skipOCRErrors, forKey: skipOCRErrorsKey)
+        UserDefaults.standard.set(ttsEngine.rawValue, forKey: ttsEngineKey)
+        UserDefaults.standard.set(irodoriServerURL, forKey: irodoriServerURLKey)
+        UserDefaults.standard.set(irodoriVenvPath, forKey: irodoriVenvPathKey)
     }
 
     /// ブロックを読み上げるべきかどうか判定する

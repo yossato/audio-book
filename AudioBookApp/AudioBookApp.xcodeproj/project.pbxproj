@@ -21,6 +21,8 @@
 		AA000012 /* ViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012; };
 		AA000013 /* ReadingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000013; };
 		AA000014 /* ReadingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014; };
+		AA000015 /* IrodoriTTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000015; };
+		AA000016 /* IrodoriChunkBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000016; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -38,6 +40,8 @@
 		AB000012 /* ViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewerView.swift; sourceTree = "<group>"; };
 		AB000013 /* ReadingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSettings.swift; sourceTree = "<group>"; };
 		AB000014 /* ReadingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingSettingsView.swift; sourceTree = "<group>"; };
+		AB000015 /* IrodoriTTSService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrodoriTTSService.swift; sourceTree = "<group>"; };
+		AB000016 /* IrodoriChunkBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrodoriChunkBuilder.swift; sourceTree = "<group>"; };
 		AC000001 /* AudioBookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioBookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC000002 /* AudioBookApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AudioBookApp.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -111,6 +115,8 @@
 			isa = PBXGroup;
 			children = (
 				AB000004 /* AudioPlayerManager.swift */,
+				AB000015 /* IrodoriTTSService.swift */,
+				AB000016 /* IrodoriChunkBuilder.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -181,6 +187,8 @@
 				AA000012 /* ViewerView.swift in Sources */,
 				AA000013 /* ReadingSettings.swift in Sources */,
 				AA000014 /* ReadingSettingsView.swift in Sources */,
+				AA000015 /* IrodoriTTSService.swift in Sources */,
+				AA000016 /* IrodoriChunkBuilder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,6 +252,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudioBookApp/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -266,6 +275,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AudioBookApp/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
