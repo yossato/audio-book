@@ -29,6 +29,13 @@ old/
 # macOS
 .DS_Store
 
+# Xcode
+AudioBookApp/build/
+AudioBookApp/AudioBookApp.xcodeproj/xcuserdata/
+AudioBookApp/AudioBookApp.xcodeproj/project.xcworkspace/xcuserdata/
+AudioBookApp/AudioBookApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+*.xcuserstate
+
 # IDE
 .vscode/
 .idea/
