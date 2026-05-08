@@ -25,13 +25,17 @@ struct ViewerView: View {
         }
         .onAppear {
             loadContent()
+            #if os(macOS)
             startIrodoriServerIfNeeded()
+            #endif
         }
         .onDisappear {
             saveReadingPosition()
             audioManager.stop()
+            #if os(macOS)
             IrodoriTTSService.shared.clearCache()
             IrodoriTTSService.shared.stopServer()
+            #endif
         }
     }
 
@@ -75,14 +79,17 @@ struct ViewerView: View {
                     Image(systemName: "gearshape")
                 }
                 .buttonStyle(.borderless)
+                #if os(macOS)
                 .popover(isPresented: $showSettings) {
                     ReadingSettingsView()
                         .frame(width: 480, height: 550)
                 }
+                #endif
                 .onChange(of: showSettings) { _, isShowing in
                     if !isShowing {
-                        // 設定画面を閉じたら現在ページの音声を再読み込み
+                        #if os(macOS)
                         startIrodoriServerIfNeeded()
+                        #endif
                         loadPageAudio()
                     }
                 }
@@ -116,7 +123,22 @@ struct ViewerView: View {
                 onPageChange: { goToPage($0) }
             )
         }
+        #if os(macOS)
         .frame(minWidth: 800, minHeight: 600)
+        #endif
+        #if os(iOS)
+        .sheet(isPresented: $showSettings) {
+            NavigationStack {
+                ReadingSettingsView()
+                    .navigationTitle("設定")
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("完了") { showSettings = false }
+                        }
+                    }
+            }
+        }
+        #endif
         .onAppear {
             audioManager.onPlaybackFinished = {
                 if currentPageIndex < (self.book?.pages.count ?? 0) - 1 {
@@ -140,7 +162,6 @@ struct ViewerView: View {
     private func loadPageAudio() {
         guard let book else { return }
         let page = book.pages[currentPageIndex]
-        // audioPath が nil またはファイルが存在しない場合は speech mode にフォールバック
         let url = page.audioPath.map { URL(fileURLWithPath: $0) }
         audioManager.loadAudio(url: url, blocks: page.blocks)
         audioManager.updateNowPlaying(
@@ -148,19 +169,21 @@ struct ViewerView: View {
             pageInfo: "ページ \(currentPageIndex + 1) / \(book.pages.count)"
         )
 
+        #if os(macOS)
         // Irodori TTS: 次ページの先読み生成
         if ReadingSettings.shared.ttsEngine == .irodori {
             pregenerateNextPage()
         }
+        #endif
     }
 
+    #if os(macOS)
     /// 次ページのチャンクを先行生成する
     private func pregenerateNextPage() {
         guard let book else { return }
         let nextIndex = currentPageIndex + 1
         guard nextIndex < book.pages.count else { return }
         let nextPage = book.pages[nextIndex]
-        // WAV が存在する場合は先読み不要
         if let audioPath = nextPage.audioPath,
            FileManager.default.fileExists(atPath: audioPath) { return }
         let readableBlocks = nextPage.blocks.filter { ReadingSettings.shared.shouldRead(block: $0) }
@@ -177,9 +200,7 @@ struct ViewerView: View {
         Task {
             do {
                 try await IrodoriTTSService.shared.startServer()
-                // モデルを事前ロード（初回リクエストのタイムアウトを防ぐ）
                 await IrodoriTTSService.shared.warmup()
-                // ウォームアップ後に現在ページのチャンクを先読み
                 let chunks = audioManager.irodoriChunksForPregeneration
                 await IrodoriTTSService.shared.pregenerate(chunks: chunks)
             } catch {
@@ -187,6 +208,7 @@ struct ViewerView: View {
             }
         }
     }
+    #endif
 
     // MARK: - Reading Position
 

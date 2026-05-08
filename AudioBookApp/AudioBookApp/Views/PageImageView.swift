@@ -8,20 +8,20 @@ struct PageImageView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let nsImage = NSImage(contentsOfFile: imagePath)
-            if let nsImage {
-                let pixelSize = pixelSize(of: nsImage)
+            let platformImage = loadPlatformImage(contentsOfFile: imagePath)
+            if let platformImage {
+                let imgPixelSize = pixelSize(of: platformImage)
                 let scale = min(
-                    geo.size.width / pixelSize.width,
-                    geo.size.height / pixelSize.height
+                    geo.size.width / imgPixelSize.width,
+                    geo.size.height / imgPixelSize.height
                 )
-                let scaledW = pixelSize.width * scale
-                let scaledH = pixelSize.height * scale
+                let scaledW = imgPixelSize.width * scale
+                let scaledH = imgPixelSize.height * scale
                 let offsetX = (geo.size.width - scaledW) / 2
                 let offsetY = (geo.size.height - scaledH) / 2
 
                 ZStack(alignment: .topLeading) {
-                    Image(nsImage: nsImage)
+                    swiftUIImage(from: platformImage)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: scaledW, height: scaledH)
@@ -65,14 +65,11 @@ struct PageImageView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        #if canImport(AppKit)
         .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    private func pixelSize(of image: NSImage) -> CGSize {
-        guard let rep = image.representations.first else {
-            return image.size
-        }
-        return CGSize(width: CGFloat(rep.pixelsWide), height: CGFloat(rep.pixelsHigh))
+        #else
+        .background(Color(uiColor: .systemBackground))
+        #endif
     }
 
     private func scaledRect(block: TextBlock, scale: CGFloat) -> CGRect {

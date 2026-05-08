@@ -1,3 +1,4 @@
+#if os(macOS)
 import SwiftUI
 
 struct AddBookView: View {
@@ -216,3 +217,4 @@ struct AddBookView: View {
         return "\(NSHomeDirectory())/Projects/audio-book/scripts"
     }
 }
+#endif

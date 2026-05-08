@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// Irodori TTS (mlx-audio) サーバーとの通信・ライフサイクル管理
@@ -265,3 +266,4 @@ enum IrodoriError: LocalizedError {
         }
     }
 }
+#endif

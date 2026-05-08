@@ -1,8 +1,11 @@
 import Foundation
+#if os(macOS)
 import AppKit
+#endif
 
-// MARK: - グローバルユーティリティ
+// MARK: - Process Utility (macOS only)
 
+#if os(macOS)
 /// Python スクリプトを非同期実行し、終了コード 0 なら true を返す。
 /// `onOutput` は任意スレッドから呼ばれる。
 func runProcessAsync(
@@ -49,6 +52,7 @@ func runProcessAsync(
         }
     }
 }
+#endif
 
 // MARK: - LibraryManager
 
@@ -69,12 +73,17 @@ final class LibraryManager {
 
     init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        #if os(macOS)
         let storedPath = UserDefaults.standard.string(forKey: "libraryRootPath")
         if let p = storedPath, !p.isEmpty {
             libraryRoot = URL(fileURLWithPath: p)
         } else {
             libraryRoot = docs.appendingPathComponent("AudioBookLibrary")
         }
+        #else
+        // iOS: Documents/AudioBookLibrary (iCloud連携は後日追加)
+        libraryRoot = docs.appendingPathComponent("AudioBookLibrary")
+        #endif
         try? FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
         loadLibrary()
     }
@@ -126,6 +135,8 @@ final class LibraryManager {
         books[idx].lastReadPosition = position
         saveLibrary()
     }
+
+    #if os(macOS)
 
     // MARK: Delete
 
@@ -285,4 +296,6 @@ final class LibraryManager {
             books[idx].cover = "\(safeTitle)/cover.jpg"
         }
     }
+
+    #endif
 }

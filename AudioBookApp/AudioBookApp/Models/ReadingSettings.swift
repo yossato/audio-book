@@ -3,12 +3,16 @@ import Foundation
 /// TTS エンジンの種類
 enum TTSEngine: String, CaseIterable {
     case system = "system"      // AVSpeechSynthesizer
+    #if os(macOS)
     case irodori = "irodori"    // mlx-audio Irodori TTS サーバー
+    #endif
 
     var displayName: String {
         switch self {
         case .system: return "システム音声 (say)"
+        #if os(macOS)
         case .irodori: return "Irodori TTS (MLX)"
+        #endif
         }
     }
 }
@@ -23,6 +27,7 @@ final class ReadingSettings {
         didSet { save() }
     }
 
+    #if os(macOS)
     /// Irodori TTS サーバーの URL
     var irodoriServerURL: String {
         didSet { save() }
@@ -32,6 +37,7 @@ final class ReadingSettings {
     var irodoriVenvPath: String {
         didSet { save() }
     }
+    #endif
 
     /// TYPE 別のスキップ設定（true = 読み飛ばす）
     var skippedTypes: Set<String> {
@@ -66,8 +72,10 @@ final class ReadingSettings {
     private let skippedTypesKey = "ReadingSettings.skippedTypes"
     private let skipOCRErrorsKey = "ReadingSettings.skipOCRErrors"
     private let ttsEngineKey = "ReadingSettings.ttsEngine"
+    #if os(macOS)
     private let irodoriServerURLKey = "ReadingSettings.irodoriServerURL"
     private let irodoriVenvPathKey = "ReadingSettings.irodoriVenvPath"
+    #endif
 
     private init() {
         if let saved = UserDefaults.standard.stringArray(forKey: skippedTypesKey) {
@@ -84,16 +92,20 @@ final class ReadingSettings {
         } else {
             ttsEngine = .system
         }
+        #if os(macOS)
         irodoriServerURL = UserDefaults.standard.string(forKey: irodoriServerURLKey) ?? "http://localhost:8000"
         irodoriVenvPath = UserDefaults.standard.string(forKey: irodoriVenvPathKey) ?? ""
+        #endif
     }
 
     private func save() {
         UserDefaults.standard.set(Array(skippedTypes), forKey: skippedTypesKey)
         UserDefaults.standard.set(skipOCRErrors, forKey: skipOCRErrorsKey)
         UserDefaults.standard.set(ttsEngine.rawValue, forKey: ttsEngineKey)
+        #if os(macOS)
         UserDefaults.standard.set(irodoriServerURL, forKey: irodoriServerURLKey)
         UserDefaults.standard.set(irodoriVenvPath, forKey: irodoriVenvPathKey)
+        #endif
     }
 
     /// ブロックを読み上げるべきかどうか判定する

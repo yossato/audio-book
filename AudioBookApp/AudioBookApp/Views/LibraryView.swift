@@ -4,9 +4,11 @@ struct LibraryView: View {
     @Bindable var libraryManager: LibraryManager
     var onBookSelected: (BookEntry) -> Void
 
+    #if os(macOS)
     @State private var showAddBook = false
     @State private var bookToDelete: BookEntry?
     @State private var showDeleteConfirm = false
+    #endif
 
     private let columns = [
         GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 20)
@@ -28,6 +30,7 @@ struct LibraryView: View {
                                             onBookSelected(entry)
                                         }
                                     }
+                                    #if os(macOS)
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             bookToDelete = entry
@@ -36,6 +39,7 @@ struct LibraryView: View {
                                             Label("削除", systemImage: "trash")
                                         }
                                     }
+                                    #endif
                             }
                         }
                         .padding(24)
@@ -43,6 +47,7 @@ struct LibraryView: View {
                 }
             }
             .navigationTitle("ライブラリ")
+            #if os(macOS)
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
@@ -53,7 +58,9 @@ struct LibraryView: View {
                     .help("本を追加")
                 }
             }
+            #endif
         }
+        #if os(macOS)
         .sheet(isPresented: $showAddBook) {
             AddBookView(libraryManager: libraryManager)
         }
@@ -75,6 +82,7 @@ struct LibraryView: View {
             Text("この操作は取り消せません。音声・OCRデータも含めてすべて削除されます。")
         }
         .frame(minWidth: 600, minHeight: 400)
+        #endif
     }
 
     // MARK: - Empty state
@@ -86,12 +94,17 @@ struct LibraryView: View {
                 .foregroundStyle(.secondary)
             Text("ライブラリに本がありません")
                 .font(.title2)
+            #if os(macOS)
             Text("「+」ボタンで本を追加してください")
                 .foregroundStyle(.secondary)
             Button("本を追加") {
                 showAddBook = true
             }
             .buttonStyle(.borderedProminent)
+            #else
+            Text("Macで本を追加し、iCloudで同期してください")
+                .foregroundStyle(.secondary)
+            #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

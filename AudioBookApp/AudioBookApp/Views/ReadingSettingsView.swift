@@ -6,6 +6,7 @@ struct ReadingSettingsView: View {
 
     var body: some View {
         Form {
+            #if os(macOS)
             Section("TTS エンジン") {
                 Picker("音声エンジン", selection: $settings.ttsEngine) {
                     ForEach(TTSEngine.allCases, id: \.self) { engine in
@@ -42,6 +43,7 @@ struct ReadingSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            #endif
 
             Section("読み飛ばすブロックの種類") {
                 ForEach(ReadingSettings.allTypes, id: \.self) { type in
@@ -70,6 +72,8 @@ struct ReadingSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        #if os(macOS)
         .frame(minWidth: 400, minHeight: 500)
+        #endif
     }
 }

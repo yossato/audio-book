@@ -31,8 +31,9 @@ final class AudioPlayerManager: NSObject {
     private var speechGroups: [SpeechGroup] = []
     private var groupStartOffset: Int = 0
 
-    // MARK: - Irodori TTS mode
+    // MARK: - Irodori TTS mode (macOS only)
 
+    #if os(macOS)
     private var isIrodoriMode = false
     private var irodoriChunks: [IrodoriChunk] = []
     private var irodoriBlocks: [TextBlock] = []
@@ -42,11 +43,21 @@ final class AudioPlayerManager: NSObject {
     private var irodoriCumulativeTime: Double = 0
     /// 現在のチャンクの再生開始累積時間
     private var irodoriChunkStartTime: Double = 0
-    /// Irodori 音声生成中フラグ
-    var isIrodoriGenerating = false
     /// 先読み用にチャンクを公開
     var irodoriChunksForPregeneration: [IrodoriChunk] { irodoriChunks }
     private var irodoriPlayTask: Task<Void, Never>?
+    #endif
+    /// Irodori 音声生成中フラグ
+    var isIrodoriGenerating = false
+
+    /// Irodori モードかどうか (iOS では常に false)
+    private var isCurrentlyIrodoriMode: Bool {
+        #if os(macOS)
+        return isIrodoriMode
+        #else
+        return false
+        #endif
+    }
 
     private struct BlockRange {
         let startCharIndex: Int  // UTF-16 offset within group.text
@@ -77,7 +88,9 @@ final class AudioPlayerManager: NSObject {
         if let url, FileManager.default.fileExists(atPath: url.path) {
             // ----- WAV モード -----
             isSpeechMode = false
+            #if os(macOS)
             isIrodoriMode = false
+            #endif
             wavBlocks = blocks
             do {
                 player = try AVAudioPlayer(contentsOf: url)
@@ -90,24 +103,14 @@ final class AudioPlayerManager: NSObject {
             } catch {
                 print("[AudioPlayerManager] WAV ロード失敗: \(error)")
             }
-        } else if ReadingSettings.shared.ttsEngine == .irodori {
-            // ----- Irodori TTS モード -----
-            isSpeechMode = false
-            isIrodoriMode = true
-            irodoriBlocks = blocks.filter { $0.isReadable }
-            irodoriChunks = IrodoriChunkBuilder.buildChunks(from: irodoriBlocks)
-            currentIrodoriChunkIndex = 0
-            irodoriCumulativeTime = 0
-            irodoriChunkStartTime = 0
-            currentTime = 0
-            activeBlockId = -1
-            // 推定 duration (後で実際の WAV から更新)
-            duration = estimateSpeechDuration(blocks: irodoriBlocks, rate: playbackRate)
-            print("[Irodori] Loaded \(irodoriChunks.count) chunks from \(irodoriBlocks.count) blocks")
+        } else if loadIrodoriIfNeeded(blocks: blocks) {
+            // Irodori モードでロード済み
         } else {
             // ----- 音声合成モード (say) -----
             isSpeechMode = true
+            #if os(macOS)
             isIrodoriMode = false
+            #endif
             speechBlocks = blocks.filter { $0.isReadable }
             speechGroups = buildSpeechGroups(from: speechBlocks)
             speechUtterances = []
@@ -121,10 +124,41 @@ final class AudioPlayerManager: NSObject {
         }
     }
 
+    /// Irodori TTS モードでのロード (macOS でエンジンが irodori の場合のみ)
+    private func loadIrodoriIfNeeded(blocks: [TextBlock]) -> Bool {
+        #if os(macOS)
+        guard ReadingSettings.shared.ttsEngine == .irodori else { return false }
+        isSpeechMode = false
+        isIrodoriMode = true
+        irodoriBlocks = blocks.filter { $0.isReadable }
+        irodoriChunks = IrodoriChunkBuilder.buildChunks(from: irodoriBlocks)
+        currentIrodoriChunkIndex = 0
+        irodoriCumulativeTime = 0
+        irodoriChunkStartTime = 0
+        currentTime = 0
+        activeBlockId = -1
+        duration = estimateSpeechDuration(blocks: irodoriBlocks, rate: playbackRate)
+        print("[Irodori] Loaded \(irodoriChunks.count) chunks from \(irodoriBlocks.count) blocks")
+        return true
+        #else
+        return false
+        #endif
+    }
+
     // MARK: - Play / Pause / Stop
 
     func play() {
-        if isIrodoriMode {
+        #if os(iOS)
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("[AudioPlayerManager] AVAudioSession setup failed: \(error)")
+        }
+        #endif
+
+        if isCurrentlyIrodoriMode {
+            #if os(macOS)
             if let chunkPlayer = irodoriChunkPlayer, !chunkPlayer.isPlaying {
                 // 一時停止からの復帰
                 chunkPlayer.rate = playbackRate
@@ -135,6 +169,7 @@ final class AudioPlayerManager: NSObject {
             } else {
                 playIrodoriFromChunk(index: currentIrodoriChunkIndex)
             }
+            #endif
         } else if isSpeechMode {
             if synthesizer?.isPaused == true {
                 synthesizer?.continueSpeaking()
@@ -155,8 +190,10 @@ final class AudioPlayerManager: NSObject {
     }
 
     func pause() {
-        if isIrodoriMode {
+        if isCurrentlyIrodoriMode {
+            #if os(macOS)
             irodoriChunkPlayer?.pause()
+            #endif
         } else if isSpeechMode {
             synthesizer?.pauseSpeaking(at: .word)
         } else {
@@ -172,7 +209,8 @@ final class AudioPlayerManager: NSObject {
     }
 
     func stop() {
-        if isIrodoriMode {
+        if isCurrentlyIrodoriMode {
+            #if os(macOS)
             irodoriPlayTask?.cancel()
             irodoriPlayTask = nil
             irodoriChunkPlayer?.stop()
@@ -181,6 +219,7 @@ final class AudioPlayerManager: NSObject {
             irodoriCumulativeTime = 0
             irodoriChunkStartTime = 0
             activeBlockId = -1
+            #endif
         } else if isSpeechMode {
             synthesizer?.stopSpeaking(at: .immediate)
             speechUtterances = []
@@ -197,8 +236,8 @@ final class AudioPlayerManager: NSObject {
     // MARK: - Seek
 
     func seek(to time: Double) {
-        if isIrodoriMode {
-            // Irodori モード: 推定時間からチャンクを特定
+        if isCurrentlyIrodoriMode {
+            #if os(macOS)
             guard !irodoriChunks.isEmpty else { return }
             let charsPerSec = estimatedCharsPerSecond(rate: playbackRate)
             var accumulated = 0.0
@@ -222,6 +261,7 @@ final class AudioPlayerManager: NSObject {
             irodoriCumulativeTime = accumulated
             currentTime = time
             if wasPlaying { playIrodoriFromChunk(index: safeIdx) }
+            #endif
         } else if isSpeechMode {
             // 推定時間からブロックを特定してジャンプ
             guard !speechBlocks.isEmpty else { return }
@@ -255,8 +295,8 @@ final class AudioPlayerManager: NSObject {
     }
 
     func seekToBlock(_ block: TextBlock) {
-        if isIrodoriMode {
-            // ブロックが含まれるチャンクを探す
+        if isCurrentlyIrodoriMode {
+            #if os(macOS)
             guard let chunkIdx = irodoriChunks.firstIndex(where: { chunk in
                 chunk.blockRanges.contains { $0.blockId == block.id }
             }) else { return }
@@ -274,6 +314,7 @@ final class AudioPlayerManager: NSObject {
             irodoriCumulativeTime = accumulated
             currentTime = accumulated
             playIrodoriFromChunk(index: chunkIdx)
+            #endif
         } else if isSpeechMode {
             guard let blockIdx = speechBlocks.firstIndex(where: { $0.id == block.id }) else { return }
             synthesizer?.stopSpeaking(at: .immediate)
@@ -292,10 +333,11 @@ final class AudioPlayerManager: NSObject {
 
     func setRate(_ rate: Float) {
         playbackRate = rate
-        if isIrodoriMode {
+        if isCurrentlyIrodoriMode {
+            #if os(macOS)
             duration = estimateSpeechDuration(blocks: irodoriBlocks, rate: rate)
-            // Irodori モードでは AVAudioPlayer.rate で速度変更
             irodoriChunkPlayer?.rate = rate
+            #endif
         } else if isSpeechMode {
             duration = estimateSpeechDuration(blocks: speechBlocks, rate: rate)
             // 再生中 or 一時停止中であれば新しい速度で再起動
@@ -309,8 +351,9 @@ final class AudioPlayerManager: NSObject {
         updateNowPlaying()
     }
 
-    // MARK: - Irodori TTS Playback
+    // MARK: - Irodori TTS Playback (macOS only)
 
+    #if os(macOS)
     private func playIrodoriFromChunk(index: Int) {
         guard isIrodoriMode else { return }
         guard index < irodoriChunks.count else {
@@ -426,6 +469,7 @@ final class AudioPlayerManager: NSObject {
             onPlaybackFinished?()
         }
     }
+    #endif
 
     // MARK: - Speech Synthesis
 
@@ -619,13 +663,15 @@ extension AudioPlayerManager: AVAudioPlayerDelegate {
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            #if os(macOS)
             if self.isIrodoriMode {
                 self.irodoriChunkDidFinish()
-            } else {
-                self.isPlaying = false
-                self.stopTimer()
-                self.onPlaybackFinished?()
+                return
             }
+            #endif
+            self.isPlaying = false
+            self.stopTimer()
+            self.onPlaybackFinished?()
         }
     }
 }
@@ -694,4 +740,3 @@ extension AudioPlayerManager: AVSpeechSynthesizerDelegate {
         }
     }
 }
-

@@ -29,14 +29,18 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            #if os(macOS)
             loadFromCommandLine()
+            #endif
         }
     }
 
+    #if os(macOS)
     private func loadFromCommandLine() {
         let args = CommandLine.arguments
         if let idx = args.firstIndex(of: "--book"), idx + 1 < args.count {
             directBookURL = URL(fileURLWithPath: args[idx + 1])
         }
     }
+    #endif
 }

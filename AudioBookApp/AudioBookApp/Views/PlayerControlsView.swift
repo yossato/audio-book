@@ -47,7 +47,9 @@ struct PlayerControlsView: View {
                         .font(.title2)
                 }
                 .disabled(pageIndex <= 0)
+                #if os(macOS)
                 .keyboardShortcut(.leftArrow, modifiers: [])
+                #endif
 
                 Button(action: { audioManager.togglePlayPause() }) {
                     if audioManager.isIrodoriGenerating {
@@ -59,14 +61,18 @@ struct PlayerControlsView: View {
                             .font(.system(size: 36))
                     }
                 }
+                #if os(macOS)
                 .keyboardShortcut(.space, modifiers: [])
+                #endif
 
                 Button(action: onNextPage) {
                     Image(systemName: "chevron.right")
                         .font(.title2)
                 }
                 .disabled(pageIndex >= totalPages - 1)
+                #if os(macOS)
                 .keyboardShortcut(.rightArrow, modifiers: [])
+                #endif
 
                 Spacer()
 

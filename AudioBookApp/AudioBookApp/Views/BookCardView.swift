@@ -34,8 +34,8 @@ struct BookCardView: View {
     @ViewBuilder
     private var coverImageView: some View {
         if let url = coverURL,
-           let nsImage = NSImage(contentsOf: url) {
-            Image(nsImage: nsImage)
+           let image = loadPlatformImage(contentsOf: url) {
+            swiftUIImage(from: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {

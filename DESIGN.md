@@ -417,3 +417,9 @@ python scripts/tts_process.py --book book.json [--voice Kyoko] [--rate 200] [--s
 ```bash
 python viewer/app.py --book book.json
 ```
+
+---
+
+## Phase 6: iPhone/iPad 対応
+
+詳細は [DESIGN-iOS.md](DESIGN-iOS.md) を参照。

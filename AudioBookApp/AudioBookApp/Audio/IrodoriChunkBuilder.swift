@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 /// Irodori TTS 用のチャンク（複数の SpeechGroup を結合して 60〜200 文字にまとめたもの）
@@ -111,3 +112,4 @@ enum IrodoriChunkBuilder {
         return result.trimmingCharacters(in: .whitespaces)
     }
 }
+#endif
