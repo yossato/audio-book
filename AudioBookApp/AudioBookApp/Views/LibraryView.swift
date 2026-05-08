@@ -8,6 +8,8 @@ struct LibraryView: View {
     @State private var showAddBook = false
     @State private var bookToDelete: BookEntry?
     @State private var showDeleteConfirm = false
+    #else
+    @State private var showFolderPicker = false
     #endif
 
     private let columns = [
@@ -58,6 +60,31 @@ struct LibraryView: View {
                     .help("本を追加")
                 }
             }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showFolderPicker = true
+                    } label: {
+                        Image(systemName: "folder.badge.plus")
+                    }
+                    .help("ライブラリフォルダを選択")
+                }
+            }
+            .fileImporter(
+                isPresented: $showFolderPicker,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    if let url = urls.first {
+                        libraryManager.setExternalFolder(url: url)
+                    }
+                case .failure(let error):
+                    print("[LibraryView] Folder picker error: \(error)")
+                }
+            }
             #endif
         }
         #if os(macOS)
@@ -102,8 +129,13 @@ struct LibraryView: View {
             }
             .buttonStyle(.borderedProminent)
             #else
-            Text("Macで本を追加し、iCloudで同期してください")
+            Text("右上のフォルダボタンから\niCloud Driveのライブラリを選択してください")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("フォルダを選択") {
+                showFolderPicker = true
+            }
+            .buttonStyle(.borderedProminent)
             #endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

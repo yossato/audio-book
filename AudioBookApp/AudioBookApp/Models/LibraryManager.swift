@@ -63,29 +63,112 @@ final class LibraryManager {
     // MARK: State
 
     var books: [BookEntry] = []
-    let libraryRoot: URL
+    private(set) var libraryRoot: URL
+
+    /// iCloud Drive フォルダが設定済みかどうか
+    var hasExternalLibrary: Bool {
+        #if os(macOS)
+        let stored = UserDefaults.standard.string(forKey: "libraryRootPath") ?? ""
+        return !stored.isEmpty
+        #else
+        return UserDefaults.standard.data(forKey: Self.bookmarkKey) != nil
+        #endif
+    }
 
     private var libraryJSONURL: URL {
         libraryRoot.appendingPathComponent("library.json")
     }
 
+    #if os(iOS)
+    private static let bookmarkKey = "LibraryManager.folderBookmark"
+    /// security-scoped リソースがアクティブかどうか
+    private var isAccessingSecurityScope = false
+    #endif
+
     // MARK: Init
 
     init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let fallback = docs.appendingPathComponent("AudioBookLibrary")
+
         #if os(macOS)
         let storedPath = UserDefaults.standard.string(forKey: "libraryRootPath")
         if let p = storedPath, !p.isEmpty {
             libraryRoot = URL(fileURLWithPath: p)
         } else {
-            libraryRoot = docs.appendingPathComponent("AudioBookLibrary")
+            libraryRoot = fallback
         }
         #else
-        // iOS: Documents/AudioBookLibrary (iCloud連携は後日追加)
-        libraryRoot = docs.appendingPathComponent("AudioBookLibrary")
+        // iOS: bookmark から復元、なければ Documents/AudioBookLibrary
+        if let bookmarkData = UserDefaults.standard.data(forKey: Self.bookmarkKey) {
+            var stale = false
+            if let url = try? URL(resolvingBookmarkData: bookmarkData, bookmarkDataIsStale: &stale) {
+                if stale {
+                    // bookmark が古い場合は再保存を試みる
+                    if let fresh = try? url.bookmarkData(options: .minimalBookmark) {
+                        UserDefaults.standard.set(fresh, forKey: Self.bookmarkKey)
+                    }
+                }
+                libraryRoot = url
+            } else {
+                libraryRoot = fallback
+            }
+        } else {
+            libraryRoot = fallback
+        }
         #endif
         try? FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
+        startAccessIfNeeded()
         loadLibrary()
+    }
+
+    // MARK: - External Library Folder
+
+    #if os(macOS)
+    /// ライブラリルートを変更する (macOS)
+    func setLibraryRoot(path: String) {
+        UserDefaults.standard.set(path, forKey: "libraryRootPath")
+        libraryRoot = URL(fileURLWithPath: path)
+        try? FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
+        loadLibrary()
+    }
+
+    /// iCloud Drive のデフォルトパスを返す
+    static var iCloudDrivePath: String {
+        let home = NSHomeDirectory()
+        return "\(home)/Library/Mobile Documents/com~apple~CloudDocs/AudioBookLibrary"
+    }
+    #endif
+
+    #if os(iOS)
+    /// ユーザーが選択したフォルダの URL を security-scoped bookmark として保存する
+    func setExternalFolder(url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            print("[LibraryManager] Failed to access security-scoped resource")
+            return
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+
+        do {
+            let bookmarkData = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+            UserDefaults.standard.set(bookmarkData, forKey: Self.bookmarkKey)
+            libraryRoot = url
+            startAccessIfNeeded()
+            loadLibrary()
+        } catch {
+            print("[LibraryManager] Bookmark save failed: \(error)")
+        }
+    }
+    #endif
+
+    /// security-scoped リソースへのアクセスを開始
+    private func startAccessIfNeeded() {
+        #if os(iOS)
+        guard UserDefaults.standard.data(forKey: Self.bookmarkKey) != nil else { return }
+        if !isAccessingSecurityScope {
+            isAccessingSecurityScope = libraryRoot.startAccessingSecurityScopedResource()
+        }
+        #endif
     }
 
     // MARK: Persistence

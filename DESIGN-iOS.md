@@ -225,6 +225,63 @@ url.startAccessingSecurityScopedResource()
 6. 実機でのバックグラウンド再生・ロック画面コントロール確認
 7. iCloud同期でMacの本がiOSに表示されることを確認
 
+## 実装状況
+
+### Step 1-5: 完了 ✅ (commit `7040d82`)
+
+全ステップのビルドが macOS / iOS Simulator の両方で成功。
+
+**主な実装内容:**
+- `project.pbxproj`: `SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx"`, iOS 17.0, `UIBackgroundModes = audio`
+- `PlatformImage.swift` (新規): `NSImage`/`UIImage` 抽象化 (`loadPlatformImage()`, `swiftUIImage()`, `pixelSize()`)
+- macOS専用ファイル3つを `#if os(macOS)` で全体ラップ: `AddBookView`, `IrodoriTTSService`, `IrodoriChunkBuilder`
+- `AudioPlayerManager.swift`: `isCurrentlyIrodoriMode` 計算プロパティ導入 (iOSでは常にfalse), iOS用 `AVAudioSession(.playback)` 設定追加
+- `PlayerControlsView.swift`: `.keyboardShortcut()` を macOS 限定に
+- その他共有ファイル (`LibraryManager`, `ReadingSettings`, `ViewerView`, `LibraryView`, `ContentView`, `ReadingSettingsView`): 条件コンパイルで macOS/iOS 分岐
+
+**技術的な発見:**
+- Swift の `#if os()` は `if-else` チェーンを分割できない → `isCurrentlyIrodoriMode` 計算プロパティで解決
+- `AVAudioSession.Mode.spokenContent` は iOS 26.4 SDK に存在しない → `.default` を使用
+- コマンドラインから `-sdk iphonesimulator` でビルド可能（スキームが iOS destination を認識しなくても）
+
+### Step 6: iCloud Drive 連携 ✅
+
+**Mac側:**
+- `LibraryManager.setLibraryRoot(path:)` でライブラリルートを変更可能
+- `LibraryManager.iCloudDrivePath` で iCloud Drive のデフォルトパスを返す
+- 既存ライブラリ → `~/Library/Mobile Documents/com~apple~CloudDocs/AudioBookLibrary/` にコピーで同期
+
+**iOS側:**
+- `LibraryView` にフォルダ選択ボタン (`folder.badge.plus`) + `.fileImporter` を追加
+- `LibraryManager.setExternalFolder(url:)` で security-scoped bookmark を UserDefaults に保存
+- 起動時に bookmark から URL を復元し `startAccessingSecurityScopedResource()` でアクセス権確保
+- bookmark が stale な場合は自動で再保存を試みる
+
+**同期フロー (実運用):**
+```
+1. Mac: ライブラリを iCloud Drive にコピー
+   cp -r ~/Documents/AudioBookLibrary ~/Library/Mobile\ Documents/com~apple~CloudDocs/AudioBookLibrary
+
+2. iCloud が自動同期（数分〜数十分、サイズによる）
+
+3. iOS: アプリ起動 → 「フォルダを選択」→ iCloud Drive の AudioBookLibrary を指定
+
+4. 以降はアプリ再起動時に bookmark から自動復元
+```
+
+### シミュレータでの動作確認 ✅
+
+- iPhone 17 シミュレータでビルド・インストール・起動を確認
+- ライブラリ画面、ビューア画面、ページ遷移、AVSpeechSynthesizer 読み上げが動作
+- demo_book データを Documents に配置して表示確認済み
+
+### 実機テスト 🔄 進行中
+
+- iPhone SE 3 (タピオカンダイレクト) を接続済み
+- Xcode からの実機インストールは Signing Team の設定が必要
+- Xcode > Signing & Capabilities > Team で Apple ID を設定後、`Cmd+R` で実機にインストール
+- 無料 Apple ID で7日間有効な開発者署名でインストール可能
+
 ## 注意事項
 
 - MVP版iCloud連携は通常のiCloud Driveフォルダを使う（Developer Program不要）
@@ -232,3 +289,4 @@ url.startAccessingSecurityScopedResource()
 - 大きなWAVファイルのiCloud同期には時間がかかる → AVSpeechSynthesizerフォールバックで対処
 - `@Observable` は iOS 17+ 必須 → iOS 17未満は非対応
 - iOS実機テストには最低限Apple IDでのXcodeサインインが必要（7日間の署名期限）
+- iPhone側で「設定 > 一般 > VPNとデバイス管理」から開発者を信頼する操作が必要な場合あり
