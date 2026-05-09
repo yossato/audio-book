@@ -71,7 +71,21 @@ func loadBook(from url: URL) throws -> Book {
 
 private func resolvePath(_ path: String, base: URL) -> String {
     if path.hasPrefix("/") {
-        return path
+        // 絶対パスでも、実行環境と異なる場合がある（例: Macで生成→iPhoneで参照）。
+        // ファイルが存在しなければ、ファイル名だけ取り出して base 基準で解決する。
+        if FileManager.default.fileExists(atPath: path) {
+            return path
+        }
+        // "pages/foo.jpg" のように book.json からの相対部分を復元
+        let fileName = (path as NSString).lastPathComponent
+        // 親ディレクトリ名も含めて解決（例: pages/foo.jpg）
+        let parentDir = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+        let resolved = base.appendingPathComponent(parentDir).appendingPathComponent(fileName).path
+        if FileManager.default.fileExists(atPath: resolved) {
+            return resolved
+        }
+        // フォールバック: ファイル名だけで解決
+        return base.appendingPathComponent(fileName).path
     }
     return base.appendingPathComponent(path).path
 }

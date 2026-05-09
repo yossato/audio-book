@@ -8,7 +8,8 @@ struct PageImageView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let platformImage = loadPlatformImage(contentsOfFile: imagePath)
+            let imageURL = URL(fileURLWithPath: imagePath)
+            let platformImage = loadPlatformImage(contentsOf: imageURL)
             if let platformImage {
                 let imgPixelSize = pixelSize(of: platformImage)
                 let scale = min(

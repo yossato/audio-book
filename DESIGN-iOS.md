@@ -275,12 +275,34 @@ url.startAccessingSecurityScopedResource()
 - ライブラリ画面、ビューア画面、ページ遷移、AVSpeechSynthesizer 読み上げが動作
 - demo_book データを Documents に配置して表示確認済み
 
-### 実機テスト 🔄 進行中
+### 実機テスト ✅
 
-- iPhone SE 3 (タピオカンダイレクト) を接続済み
-- Xcode からの実機インストールは Signing Team の設定が必要
-- Xcode > Signing & Capabilities > Team で Apple ID を設定後、`Cmd+R` で実機にインストール
-- 無料 Apple ID で7日間有効な開発者署名でインストール可能
+- iPhone SE 3 実機でiCloud Drive経由のライブラリ表示・画像閲覧・音声再生を確認
+
+#### 発見された問題と修正
+
+**問題1: 本の画像が「画像を読み込めません」エラー**
+
+原因が2つあった:
+
+1. **`book.json` に Mac の絶対パスが保存されていた**
+   - OCR処理 (`ocr_process.py`) が `image_path` を `/Users/yoshiaki/Documents/AudioBookLibrary/...` のように絶対パスで保存
+   - iPhoneではこのパスは存在しない
+   - 修正: `ocr_process.py` で `book.json` 出力先からの相対パス（例: `pages/image.jpg`）を保存するように変更
+   - 同様に `tts_process.py` の `audio_path` も相対パスに修正
+
+2. **iOS で `UIImage(contentsOfFile:)` が security-scoped bookmark のアクセス権を認識しない**
+   - `PageImageView.swift` が `loadPlatformImage(contentsOfFile:)` （文字列パスベース）を使用していた
+   - iCloud Drive のファイルは security-scoped bookmark 経由でアクセス権を得るが、文字列パスベースの API はこれを認識しない
+   - 修正: URL ベースの `loadPlatformImage(contentsOf: url)` に変更（`Data(contentsOf: url)` 経由で security scope を通過）
+   - `BookCardView` の表紙画像は元から URL 版を使用していたため問題なかった
+
+3. **`BookModel.resolvePath()` の互換性対応**
+   - 既存の `book.json` には絶対パスが残っている可能性があるため、`resolvePath()` にフォールバック処理を追加
+   - 絶対パスがファイルシステムに存在しない場合、親ディレクトリ名+ファイル名で `baseDir` 基準に再解決
+
+**既存データの修正:**
+- ライブラリ内の全 `book.json`（4冊）の `image_path` / `audio_path` を相対パスに一括変換済み
 
 ## 注意事項
 
@@ -290,3 +312,5 @@ url.startAccessingSecurityScopedResource()
 - `@Observable` は iOS 17+ 必須 → iOS 17未満は非対応
 - iOS実機テストには最低限Apple IDでのXcodeサインインが必要（7日間の署名期限）
 - iPhone側で「設定 > 一般 > VPNとデバイス管理」から開発者を信頼する操作が必要な場合あり
+- `book.json` のパスは必ず相対パス（`pages/image.jpg`, `audio/page_001.m4a`）で保存すること。絶対パスだと Mac↔iOS 間で互換性がない
+- iOS でファイルアクセスする際は URL ベースの API を使うこと（`UIImage(contentsOfFile:)` は security-scoped bookmark を認識しない）

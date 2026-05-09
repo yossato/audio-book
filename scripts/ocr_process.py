@@ -62,7 +62,8 @@ def parse_xml_types(xml_file: Path) -> dict[str, str]:
     return type_map
 
 
-def convert_to_book_json(ocr_output_dir: Path, input_dir: Path, title: str = "") -> dict:
+def convert_to_book_json(ocr_output_dir: Path, input_dir: Path, title: str = "",
+                         book_dir: Path | None = None) -> dict:
     """ndlocr-lite の JSON + XML 出力を book.json 形式に変換する"""
     pages = []
 
@@ -76,7 +77,12 @@ def convert_to_book_json(ocr_output_dir: Path, input_dir: Path, title: str = "")
         type_map = parse_xml_types(xml_file)
 
         image_name = ocr_data["imginfo"]["img_name"]
-        image_path = str(input_dir / image_name)
+        # book.json からの相対パスで保存（例: pages/image.jpg）
+        if book_dir is not None:
+            image_path = str((input_dir / image_name).relative_to(book_dir))
+        else:
+            # フォールバック: input_dir の最後のディレクトリ名 + ファイル名
+            image_path = f"{input_dir.name}/{image_name}"
 
         blocks = []
         for item in ocr_data["contents"][0]:
@@ -136,9 +142,11 @@ def main():
         ocr_output_dir = run_ocr(input_dir, viz=args.viz)
         print(f"[INFO] OCR出力: {ocr_output_dir}")
 
-    book = convert_to_book_json(ocr_output_dir, input_dir, title=args.title)
-
     output_path = Path(args.output).resolve()
+    book_dir = output_path.parent
+
+    book = convert_to_book_json(ocr_output_dir, input_dir, title=args.title,
+                                book_dir=book_dir)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(book, f, ensure_ascii=False, indent=2)
 

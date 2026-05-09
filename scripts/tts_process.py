@@ -86,7 +86,7 @@ def process_page(page: dict, audio_dir: Path, tmp_dir: Path, voice: str, rate: i
     # ページ全体の音声ファイルを結合
     page_audio_path = audio_dir / f"page_{page_num:03d}.wav"
     concatenate_wav_files(block_wavs, page_audio_path)
-    page["audio_path"] = str(page_audio_path)
+    page["audio_path"] = f"audio/page_{page_num:03d}.wav"
 
     print(f"  Page {page_num}: {len(block_wavs)} blocks, {current_time:.1f}s total")
 
