@@ -54,6 +54,55 @@ func runProcessAsync(
 }
 #endif
 
+#if os(macOS)
+// MARK: - TTS Progress
+
+enum TTSPhase: String, Sendable {
+    case starting
+    case tts
+    case alignment = "fa"
+    case compress
+    case complete
+}
+
+struct TTSProgress: Sendable {
+    let phase: TTSPhase
+    let page: Int
+    let total: Int
+    let message: String
+
+    /// スクリプトの PROGRESS: 行をパースする
+    static func parse(_ line: String) -> TTSProgress? {
+        guard line.hasPrefix("PROGRESS:") else { return nil }
+        let body = line.dropFirst("PROGRESS:".count)
+        var dict: [String: String] = [:]
+        for component in body.split(separator: ",") {
+            let kv = component.split(separator: "=", maxSplits: 1)
+            if kv.count == 2 { dict[String(kv[0])] = String(kv[1]) }
+        }
+        guard let phaseStr = dict["phase"],
+              let phase = TTSPhase(rawValue: phaseStr) else { return nil }
+        return TTSProgress(
+            phase: phase,
+            page: Int(dict["page"] ?? "0") ?? 0,
+            total: Int(dict["total"] ?? "0") ?? 0,
+            message: dict["status"] ?? ""
+        )
+    }
+
+    /// UI 表示用のテキスト
+    var displayText: String {
+        switch phase {
+        case .starting: return message
+        case .tts: return "音声生成中 \(page)/\(total)"
+        case .alignment: return "アライメント \(page)/\(total)"
+        case .compress: return "圧縮中 \(page)/\(total)"
+        case .complete: return "完了"
+        }
+    }
+}
+#endif
+
 // MARK: - LibraryManager
 
 @MainActor
@@ -220,6 +269,171 @@ final class LibraryManager {
     }
 
     #if os(macOS)
+
+    // MARK: - Batch TTS
+
+    /// 現在実行中の TTS プロセス（キャンセル用）
+    private var ttsTask: Task<Void, Never>?
+
+    /// TTS 生成中の本の ID
+    private(set) var ttsGeneratingBookId: String?
+
+    /// TTS 進捗情報
+    private(set) var ttsProgress: TTSProgress?
+
+    /// Irodori TTS によるバッチ音声生成を開始する
+    func generateBatchTTS(entry: BookEntry) {
+        guard ttsTask == nil else {
+            print("[LibraryManager] TTS生成は既に実行中です")
+            return
+        }
+
+        let bookId = entry.id
+        let bookJSONPath = bookJSONURL(for: entry).path
+
+        ttsGeneratingBookId = bookId
+        ttsProgress = TTSProgress(phase: .starting, page: 0, total: 0, message: "準備中...")
+        updateBookStatus(id: bookId, status: .ttsProcessing)
+
+        ttsTask = Task.detached { [weak self] in
+            let settings = await ReadingSettings.shared
+            let venvPath = await settings.irodoriVenvPath
+            let serverURL = await settings.irodoriServerURL
+            let refWavPath = await settings.irodoriRefWavPath
+
+            let pythonPath = (venvPath as NSString).appendingPathComponent("bin/python")
+            let scriptsDir = UserDefaults.standard.string(forKey: "scriptsDirectory")
+                ?? AddBookView.defaultScriptsPath
+
+            print("[BatchTTS] venvPath=\(venvPath)")
+            print("[BatchTTS] pythonPath=\(pythonPath)")
+            print("[BatchTTS] scriptsDir=\(scriptsDir)")
+            print("[BatchTTS] serverURL=\(serverURL)")
+            print("[BatchTTS] bookJSONPath=\(bookJSONPath)")
+
+            // Phase 1: サーバー起動
+            await MainActor.run {
+                self?.ttsProgress = TTSProgress(phase: .starting, page: 0, total: 0, message: "サーバー起動中...")
+            }
+            do {
+                try await IrodoriTTSService.shared.startServer()
+                print("[BatchTTS] サーバー起動成功")
+            } catch {
+                print("[BatchTTS] サーバー起動失敗: \(error.localizedDescription)")
+                await MainActor.run {
+                    self?.ttsProgress = nil
+                    self?.ttsGeneratingBookId = nil
+                    self?.ttsTask = nil
+                    self?.updateBookStatus(id: bookId, status: .error)
+                }
+                return
+            }
+
+            // Phase 2: TTS 生成
+            await MainActor.run {
+                self?.ttsProgress = TTSProgress(phase: .tts, page: 0, total: 0, message: "音声生成中...")
+            }
+
+            var ttsArgs = [
+                "\(scriptsDir)/irodori_tts_batch.py",
+                "--book", bookJSONPath,
+                "--server-url", serverURL,
+                "--phase", "tts",
+            ]
+            if !refWavPath.isEmpty {
+                ttsArgs += ["--ref-wav", refWavPath]
+            }
+            print("[BatchTTS] TTS実行: \(pythonPath) \(ttsArgs.joined(separator: " "))")
+
+            let ttsOK = await runProcessAsync(
+                executablePath: pythonPath,
+                arguments: ttsArgs,
+                onOutput: { line in
+                    print("[BatchTTS:stdout] \(line)")
+                    if let progress = TTSProgress.parse(line) {
+                        Task { @MainActor in
+                            self?.ttsProgress = progress
+                        }
+                    }
+                }
+            )
+
+            guard ttsOK else {
+                print("[BatchTTS] TTS生成失敗")
+                await MainActor.run {
+                    self?.ttsProgress = nil
+                    self?.ttsGeneratingBookId = nil
+                    self?.ttsTask = nil
+                    self?.updateBookStatus(id: bookId, status: .error)
+                }
+                await IrodoriTTSService.shared.stopServer()
+                return
+            }
+            print("[BatchTTS] TTS生成完了")
+
+            // Phase 3: サーバー停止 → メモリ解放
+            await IrodoriTTSService.shared.stopServer()
+            await MainActor.run {
+                self?.ttsProgress = TTSProgress(phase: .alignment, page: 0, total: 0, message: "メモリ解放待機中...")
+            }
+            print("[BatchTTS] サーバー停止、メモリ解放待機...")
+            try? await Task.sleep(for: .seconds(3))
+
+            // Phase 4: Forced Alignment + 圧縮
+            await MainActor.run {
+                self?.ttsProgress = TTSProgress(phase: .alignment, page: 0, total: 0, message: "アライメント中...")
+            }
+
+            var faArgs = [
+                "\(scriptsDir)/irodori_tts_batch.py",
+                "--book", bookJSONPath,
+                "--server-url", serverURL,
+                "--phase", "fa-compress",
+            ]
+            if !refWavPath.isEmpty {
+                faArgs += ["--ref-wav", refWavPath]
+            }
+            print("[BatchTTS] FA実行: \(pythonPath) \(faArgs.joined(separator: " "))")
+
+            let faOK = await runProcessAsync(
+                executablePath: pythonPath,
+                arguments: faArgs,
+                onOutput: { line in
+                    print("[BatchTTS:stdout] \(line)")
+                    if let progress = TTSProgress.parse(line) {
+                        Task { @MainActor in
+                            self?.ttsProgress = progress
+                        }
+                    }
+                }
+            )
+
+            print("[BatchTTS] FA完了: \(faOK)")
+            await MainActor.run {
+                self?.ttsProgress = nil
+                self?.ttsGeneratingBookId = nil
+                self?.ttsTask = nil
+                if faOK {
+                    self?.updateBookStatus(id: bookId, status: .ready)
+                } else {
+                    // FA/圧縮失敗でも音声は生成済みなので ready にする
+                    self?.updateBookStatus(id: bookId, status: .ready)
+                }
+            }
+        }
+    }
+
+    /// TTS 生成をキャンセルする
+    func cancelBatchTTS() {
+        ttsTask?.cancel()
+        ttsTask = nil
+        IrodoriTTSService.shared.stopServer()
+        if let bookId = ttsGeneratingBookId {
+            updateBookStatus(id: bookId, status: .ready)
+        }
+        ttsGeneratingBookId = nil
+        ttsProgress = nil
+    }
 
     // MARK: Delete
 

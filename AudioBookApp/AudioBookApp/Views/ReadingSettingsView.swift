@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 読み上げ設定画面
 struct ReadingSettingsView: View {
@@ -38,7 +39,30 @@ struct ReadingSettingsView: View {
                             }
                         }
                     }
-                    Text("mlx-audio サーバーはアプリ起動時に自動起動します")
+                    LabeledContent("リファレンス音声") {
+                        HStack {
+                            TextField("未設定（ランダム話者）", text: $settings.irodoriRefWavPath)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 250)
+                            Button("選択...") {
+                                let panel = NSOpenPanel()
+                                panel.canChooseDirectories = false
+                                panel.canChooseFiles = true
+                                panel.allowsMultipleSelection = false
+                                panel.allowedContentTypes = [.wav]
+                                panel.message = "話者固定用のリファレンス音声 WAV ファイルを選択"
+                                if panel.runModal() == .OK, let url = panel.url {
+                                    settings.irodoriRefWavPath = url.path
+                                }
+                            }
+                            if !settings.irodoriRefWavPath.isEmpty {
+                                Button("クリア") {
+                                    settings.irodoriRefWavPath = ""
+                                }
+                            }
+                        }
+                    }
+                    Text("mlx-audio サーバーはアプリ起動時に自動起動します。リファレンス音声を設定すると、バッチ生成時に話者を固定できます。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

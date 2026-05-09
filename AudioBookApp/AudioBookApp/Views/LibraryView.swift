@@ -28,12 +28,38 @@ struct LibraryView: View {
                                 BookCardView(entry: entry,
                                              coverURL: libraryManager.coverImageURL(for: entry))
                                     .onTapGesture {
-                                        if entry.status == .ready {
+                                        if entry.status == .ready || entry.status == .error {
                                             onBookSelected(entry)
                                         }
                                     }
                                     #if os(macOS)
+                                    .overlay(alignment: .bottom) {
+                                        if libraryManager.ttsGeneratingBookId == entry.id,
+                                           let progress = libraryManager.ttsProgress {
+                                            Text(progress.displayText)
+                                                .font(.caption2)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(.ultraThinMaterial)
+                                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                                .padding(.bottom, 4)
+                                        }
+                                    }
                                     .contextMenu {
+                                        if entry.status == .ready || entry.status == .error {
+                                            Button {
+                                                libraryManager.generateBatchTTS(entry: entry)
+                                            } label: {
+                                                Label("Irodori TTSで音声を生成", systemImage: "waveform")
+                                            }
+                                        }
+                                        if libraryManager.ttsGeneratingBookId == entry.id {
+                                            Button(role: .destructive) {
+                                                libraryManager.cancelBatchTTS()
+                                            } label: {
+                                                Label("TTS生成をキャンセル", systemImage: "xmark.circle")
+                                            }
+                                        }
                                         Button(role: .destructive) {
                                             bookToDelete = entry
                                             showDeleteConfirm = true

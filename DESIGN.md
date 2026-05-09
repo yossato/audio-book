@@ -420,6 +420,133 @@ python viewer/app.py --book book.json
 
 ---
 
+## Phase 7: バッチIrodori TTS音声生成 + Forced Alignment
+
+### 背景
+
+Irodori TTSによるリアルタイム音声生成はMacの負荷が高く実用的でないため、電源接続した状態で夜間にバッチ処理する方式に変更する。生成した音声にはForced Alignmentでタイムスタンプを付与し、テキストのバウンディングボックスをクリックした位置から再生できるようにする。
+
+### 全体フロー
+
+```
+ユーザーが本カードを右クリック → "Irodori TTSで音声を生成"
+  ↓
+Phase 1: mlx-audioサーバー起動 → TTSでページ単位WAV生成
+  ↓  (各ページ完了時にtts_progress.json更新 = 中断安全)
+Phase 2: サーバー停止(メモリ解放) → Qwen3-ForcedAlignerでタイムスタンプ生成
+  ↓
+Phase 3: afconvertでWAV → AAC M4A (mono, 64kbps) 変換 → book.json更新
+  ↓
+完了: BookStatus → .ready
+```
+
+メモリ制約(16GB)のため、TTSモデルとFAモデルを同時にロードしない。Phase 1完了後にサーバーを停止してからPhase 2を開始する。
+
+### アーキテクチャ
+
+#### Pythonスクリプト `scripts/irodori_tts_batch.py`
+
+Swiftアプリから `runProcessAsync()` で呼び出されるバッチ処理スクリプト。
+
+```bash
+# TTS生成のみ（Swiftアプリがサーバーを起動済み）
+python scripts/irodori_tts_batch.py --book book.json --phase tts
+
+# Forced Alignment + AAC圧縮（サーバー停止後に実行）
+python scripts/irodori_tts_batch.py --book book.json --phase fa-compress
+
+# リファレンス音声で話者固定
+python scripts/irodori_tts_batch.py --book book.json --ref-wav ref.wav
+```
+
+- ページ単位で音声生成（ブロックテキストを60-200文字チャンクに結合、IrodoriChunkBuilderと同じロジック）
+- `tts_progress.json` で進捗管理（中断→再開対応）
+- `PROGRESS:phase=tts,page=3,total=150,status=done` 形式でSwiftアプリに進捗通知
+- Forced Alignment: `mlx_audio.stt.load("mlx-community/Qwen3-ForcedAligner-0.6B-8bit")` で単語レベルタイムスタンプ取得
+- 圧縮: `afconvert -f m4af -d aac -c 1 -b 64000` (mono, 64kbps)
+
+#### Swift側の変更
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `LibraryManager.swift` | `generateBatchTTS()` / `cancelTTS()` メソッド追加。`addBook()` パターンに倣い `Task.detached` + `runProcessAsync` で実行 |
+| `LibraryView.swift` | BookCardのコンテキストメニューに「Irodori TTSで音声を生成」/「キャンセル」追加。進捗オーバーレイ表示 |
+| `ReadingSettings.swift` | `irodoriRefWavPath` プロパティ追加（話者固定用リファレンス音声パス） |
+| `ReadingSettingsView.swift` | リファレンス音声ファイル選択UI追加 |
+
+#### 変更不要な箇所
+
+- `AudioPlayerManager.swift` : `AVAudioPlayer` はM4A/AACネイティブ対応。`seekToBlock()` は既存の `audioStart` を使用
+- `PageImageView.swift` : `onBlockTapped` コールバックは既に接続済み
+- `BookModel.swift` : `audioStart`/`audioEnd` フィールドは定義済み
+- `LibraryModel.swift` : `BookStatus.ttsProcessing` は定義済み
+
+### 話者固定
+
+- Irodori-TTS v2: `--ref-wav` でゼロショット声質クローニング対応
+- VoiceDesign v2: 別モデル (`Irodori-TTS-VoiceDesign-500M-v2`) でテキスト記述による音声制御
+- 初期実装は `no-ref` (ランダム) をデフォルトとし、リファレンス音声指定をオプションで提供
+
+### Forced Alignment (Qwen3-ForcedAligner)
+
+```python
+from mlx_audio.stt import load
+aligner = load("mlx-community/Qwen3-ForcedAligner-0.6B-8bit")
+result = aligner.generate("audio.wav", text="テキスト", language="Japanese")
+for item in result:
+    print(f"[{item.start_time:.2f}s - {item.end_time:.2f}s] {item.text}")
+```
+
+- 日本語対応、単語レベルタイムスタンプ出力
+- 各単語の時間範囲をbook.jsonの各ブロックの文字位置にマッピング → `audio_start`/`audio_end` に設定
+- **依存パッケージ**: 日本語トークナイズに `nagisa` が必要 (`pip install nagisa`)
+
+### 実装上の知見・注意点
+
+#### venv の追加依存
+
+Forced Alignment の日本語対応には以下のパッケージが追加で必要:
+
+```bash
+uv pip install --python /path/to/.venv/bin/python nagisa
+```
+
+`nagisa` がないと `ImportError: Japanese tokenization requires nagisa` で FA が失敗する。
+FA 失敗時は文字数比率によるフォールバックタイムスタンプが使用される。
+
+#### バッチ TTS 中にビューアを操作する場合
+
+`ViewerView.onDisappear` で `IrodoriTTSService.shared.stopServer()` が呼ばれるため、
+バッチ TTS 実行中に本を開いて閉じるとサーバーが停止し、残りのページの TTS 生成が失敗する。
+対策として `libraryManager.ttsGeneratingBookId != nil` の場合はサーバーを停止しないようにした。
+
+#### 生成結果の実測値 (M3 MacBook Air / 16GB, 「吾輩は猫である」4ページ)
+
+| ページ | チャンク数 | 音声長 | M4Aサイズ |
+|--------|-----------|--------|----------|
+| 1 | 1 | 5.2s | 38KB |
+| 2 | 3 | 60.7s | 500KB |
+| 3 | 2 | 45.3s | 396KB |
+| 4 | 1 | - | 247KB |
+
+- AAC mono 64kbps で十分な音質（人の読み上げ声）
+- WAV (48kHz) → M4A 変換で大幅にサイズ削減
+- `AVAudioPlayer` は M4A をネイティブ再生可能（コード変更不要）
+
+#### タスクバーからの起動
+
+タスクバー (Dock) から起動すると環境変数 `PATH` が制限されるため、
+venv の Python が見つからずサーバー起動に失敗する場合がある。
+ターミナルから直接起動するか、Xcode デバッグ実行が確実。
+
+#### 中断・再開
+
+- `tts_progress.json` に `last_completed_tts_page` / `last_completed_fa_page` を記録
+- SIGTERM / SIGINT を受信すると現在のページ完了後に安全に停止
+- 再実行時は完了済みページを自動スキップ
+
+---
+
 ## Phase 6: iPhone/iPad 対応
 
 詳細は [DESIGN-iOS.md](DESIGN-iOS.md) を参照。

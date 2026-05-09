@@ -37,6 +37,11 @@ final class ReadingSettings {
     var irodoriVenvPath: String {
         didSet { save() }
     }
+
+    /// Irodori TTS のリファレンス音声 WAV パス（空文字列 = no-ref）
+    var irodoriRefWavPath: String {
+        didSet { save() }
+    }
     #endif
 
     /// TYPE 別のスキップ設定（true = 読み飛ばす）
@@ -75,6 +80,7 @@ final class ReadingSettings {
     #if os(macOS)
     private let irodoriServerURLKey = "ReadingSettings.irodoriServerURL"
     private let irodoriVenvPathKey = "ReadingSettings.irodoriVenvPath"
+    private let irodoriRefWavPathKey = "ReadingSettings.irodoriRefWavPath"
     #endif
 
     private init() {
@@ -95,6 +101,7 @@ final class ReadingSettings {
         #if os(macOS)
         irodoriServerURL = UserDefaults.standard.string(forKey: irodoriServerURLKey) ?? "http://localhost:8000"
         irodoriVenvPath = UserDefaults.standard.string(forKey: irodoriVenvPathKey) ?? ""
+        irodoriRefWavPath = UserDefaults.standard.string(forKey: irodoriRefWavPathKey) ?? ""
         #endif
     }
 
@@ -105,6 +112,7 @@ final class ReadingSettings {
         #if os(macOS)
         UserDefaults.standard.set(irodoriServerURL, forKey: irodoriServerURLKey)
         UserDefaults.standard.set(irodoriVenvPath, forKey: irodoriVenvPathKey)
+        UserDefaults.standard.set(irodoriRefWavPath, forKey: irodoriRefWavPathKey)
         #endif
     }
 

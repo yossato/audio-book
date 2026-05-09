@@ -34,7 +34,10 @@ struct ViewerView: View {
             audioManager.stop()
             #if os(macOS)
             IrodoriTTSService.shared.clearCache()
-            IrodoriTTSService.shared.stopServer()
+            // バッチTTS実行中はサーバーを停止しない
+            if libraryManager?.ttsGeneratingBookId == nil {
+                IrodoriTTSService.shared.stopServer()
+            }
             #endif
         }
     }
