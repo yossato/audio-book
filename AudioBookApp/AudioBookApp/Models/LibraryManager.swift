@@ -435,6 +435,109 @@ final class LibraryManager {
         ttsProgress = nil
     }
 
+    // MARK: Add Markdown Book
+
+    /// Markdown ファイルを本として追加する
+    func addMarkdownBook(
+        title: String,
+        sourceFile: URL,
+        onComplete: @escaping @Sendable (Bool, String) -> Void
+    ) {
+        let bookId = UUID().uuidString
+        let safeTitle = title
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let bookDir = libraryRoot.appendingPathComponent(safeTitle)
+        let bookJSONPath = bookDir.appendingPathComponent("book.json")
+
+        // ライブラリにエントリを追加
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+
+        do {
+            // 1. ディレクトリ作成
+            try FileManager.default.createDirectory(at: bookDir, withIntermediateDirectories: true)
+
+            // 2. .md ファイルをコピー
+            let destMD = bookDir.appendingPathComponent(sourceFile.lastPathComponent)
+            if !FileManager.default.fileExists(atPath: destMD.path) {
+                try FileManager.default.copyItem(at: sourceFile, to: destMD)
+            }
+
+            // 3. Markdown パース → Book
+            let book = try MarkdownParser.parse(fileURL: sourceFile, title: title)
+
+            // 4. book.json 書き出し
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(book)
+            try data.write(to: bookJSONPath, options: .atomic)
+
+            // 5. テキストカバー画像生成
+            generateTextCover(bookId: bookId, safeTitle: safeTitle, bookDir: bookDir, title: title)
+
+            // 6. ライブラリに追加
+            let entry = BookEntry(
+                id: bookId,
+                title: title,
+                directory: safeTitle,
+                cover: "\(safeTitle)/cover.jpg",
+                pageCount: book.pages.count,
+                lastReadPage: 0,
+                lastReadPosition: 0.0,
+                status: .ready,
+                createdAt: formatter.string(from: Date())
+            )
+            books.append(entry)
+            saveLibrary()
+
+            onComplete(true, "")
+        } catch {
+            onComplete(false, "Markdown 処理失敗: \(error.localizedDescription)")
+        }
+    }
+
+    /// テキストベースのカバー画像を生成する（Markdown 本用）
+    private func generateTextCover(bookId: String, safeTitle: String, bookDir: URL, title: String) {
+        let targetSize = CGSize(width: 200, height: 280)
+        let image = NSImage(size: targetSize)
+        image.lockFocus()
+
+        // 背景
+        NSColor(red: 0.2, green: 0.4, blue: 0.6, alpha: 1.0).setFill()
+        NSBezierPath.fill(NSRect(origin: .zero, size: targetSize))
+
+        // アイコン
+        let iconAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 48),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.6),
+        ]
+        let iconStr = NSAttributedString(string: "📄", attributes: iconAttrs)
+        let iconSize = iconStr.size()
+        iconStr.draw(at: NSPoint(
+            x: (targetSize.width - iconSize.width) / 2,
+            y: targetSize.height - iconSize.height - 40
+        ))
+
+        // タイトル
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.boldSystemFont(ofSize: 16),
+            .foregroundColor: NSColor.white,
+        ]
+        let titleStr = NSAttributedString(string: title, attributes: titleAttrs)
+        let titleRect = NSRect(x: 12, y: 30, width: targetSize.width - 24, height: 120)
+        titleStr.draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+
+        image.unlockFocus()
+
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+        guard let jpegData = bitmapRep.representation(using: .jpeg,
+                                                       properties: [.compressionFactor: 0.85]) else { return }
+        let coverURL = bookDir.appendingPathComponent("cover.jpg")
+        try? jpegData.write(to: coverURL)
+    }
+
     // MARK: Delete
 
     func deleteBook(_ entry: BookEntry) {

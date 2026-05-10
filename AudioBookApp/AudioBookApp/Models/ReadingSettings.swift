@@ -54,6 +54,11 @@ final class ReadingSettings {
         didSet { save() }
     }
 
+    /// 事前生成済み音声がある場合に使用するか（false の場合は常にリアルタイム TTS）
+    var usePreGeneratedAudio: Bool {
+        didSet { save() }
+    }
+
     /// ndlocr-lite で使用される全 TYPE 一覧
     static let allTypes = ["本文", "タイトル本文", "割注", "キャプション", "広告文字",
                            "柱", "ノンブル", "ルビ", "図版", "組織図", "数式", "表組"]
@@ -76,6 +81,7 @@ final class ReadingSettings {
 
     private let skippedTypesKey = "ReadingSettings.skippedTypes"
     private let skipOCRErrorsKey = "ReadingSettings.skipOCRErrors"
+    private let usePreGeneratedAudioKey = "ReadingSettings.usePreGeneratedAudio"
     private let ttsEngineKey = "ReadingSettings.ttsEngine"
     #if os(macOS)
     private let irodoriServerURLKey = "ReadingSettings.irodoriServerURL"
@@ -91,6 +97,7 @@ final class ReadingSettings {
             skippedTypes = ["割注", "キャプション", "柱", "ノンブル", "ルビ", "図版", "広告文字"]
         }
         skipOCRErrors = UserDefaults.standard.object(forKey: skipOCRErrorsKey) as? Bool ?? true
+        usePreGeneratedAudio = UserDefaults.standard.object(forKey: usePreGeneratedAudioKey) as? Bool ?? true
 
         if let engineRaw = UserDefaults.standard.string(forKey: ttsEngineKey),
            let engine = TTSEngine(rawValue: engineRaw) {
@@ -108,6 +115,7 @@ final class ReadingSettings {
     private func save() {
         UserDefaults.standard.set(Array(skippedTypes), forKey: skippedTypesKey)
         UserDefaults.standard.set(skipOCRErrors, forKey: skipOCRErrorsKey)
+        UserDefaults.standard.set(usePreGeneratedAudio, forKey: usePreGeneratedAudioKey)
         UserDefaults.standard.set(ttsEngine.rawValue, forKey: ttsEngineKey)
         #if os(macOS)
         UserDefaults.standard.set(irodoriServerURL, forKey: irodoriServerURLKey)

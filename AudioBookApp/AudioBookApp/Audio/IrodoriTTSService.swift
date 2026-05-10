@@ -193,10 +193,12 @@ final class IrodoriTTSService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 180  // 初回はモデルロードで時間がかかる
 
+        let refWavPath = ReadingSettings.shared.irodoriRefWavPath
+        let voice = refWavPath.isEmpty ? "no-ref" : refWavPath
         let body: [String: Any] = [
             "model": "mlx-community/Irodori-TTS-500M-v2-fp16",
             "input": text,
-            "voice": "no-ref",
+            "voice": voice,
             "response_format": "wav",
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

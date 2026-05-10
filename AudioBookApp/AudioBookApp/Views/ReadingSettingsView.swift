@@ -69,6 +69,13 @@ struct ReadingSettingsView: View {
             }
             #endif
 
+            Section("再生音声") {
+                Toggle("生成済み音声を使用", isOn: $settings.usePreGeneratedAudio)
+                Text("オフにすると、Irodori TTS で事前生成した音声がある場合でもシステム音声（Say コマンド）で再生します")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("読み飛ばすブロックの種類") {
                 ForEach(ReadingSettings.allTypes, id: \.self) { type in
                     let isSkipped = settings.skippedTypes.contains(type)

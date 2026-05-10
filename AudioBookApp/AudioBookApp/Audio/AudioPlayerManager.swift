@@ -80,13 +80,22 @@ final class AudioPlayerManager: NSObject {
 
     // MARK: - Load
 
+    /// 現在のページに事前生成済み音声があるか
+    private(set) var hasPreGeneratedAudio = false
+
     /// url が nil またはファイルが存在しない場合は AVSpeechSynthesizer モードで動作する
     /// TTS エンジンが irodori の場合は Irodori TTS モードで動作する
+    /// usePreGeneratedAudio が false の場合は音声ファイルがあっても TTS エンジンを使う
     func loadAudio(url: URL?, blocks: [TextBlock]) {
         stop()
 
-        if let url, FileManager.default.fileExists(atPath: url.path) {
-            // ----- WAV モード -----
+        let audioFileExists = url.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+        hasPreGeneratedAudio = audioFileExists
+        let settings = ReadingSettings.shared
+        let shouldUsePreGenerated = audioFileExists && settings.usePreGeneratedAudio
+
+        if shouldUsePreGenerated, let url {
+            // ----- WAV モード（事前生成済み音声）-----
             isSpeechMode = false
             #if os(macOS)
             isIrodoriMode = false

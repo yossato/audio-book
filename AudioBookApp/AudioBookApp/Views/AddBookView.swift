@@ -1,5 +1,19 @@
 #if os(macOS)
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// 入力ソースの種類
+private enum InputSource: String, CaseIterable {
+    case images = "images"
+    case markdown = "markdown"
+
+    var displayName: String {
+        switch self {
+        case .images: return "画像フォルダ（OCR）"
+        case .markdown: return "Markdown ファイル"
+        }
+    }
+}
 
 struct AddBookView: View {
     var libraryManager: LibraryManager
@@ -7,7 +21,9 @@ struct AddBookView: View {
 
     // MARK: - 入力
     @State private var title = ""
+    @State private var inputSource: InputSource = .images
     @State private var selectedDirectory: URL?
+    @State private var selectedMarkdownFile: URL?
 
     // Python 設定（UserDefaults で永続化）
     @AppStorage("pythonExecutable") private var pythonExecutable = Self.defaultPythonPath
@@ -18,6 +34,14 @@ struct AddBookView: View {
     @State private var progressMessage = ""
     @State private var errorMessage = ""
     @State private var showAdvanced = false
+
+    private var canAdd: Bool {
+        if isProcessing || title.isEmpty { return false }
+        switch inputSource {
+        case .images: return selectedDirectory != nil
+        case .markdown: return selectedMarkdownFile != nil
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,18 +61,22 @@ struct AddBookView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
 
-                    // 画像フォルダ選択
-                    sectionHeader("画像フォルダ")
-                    HStack {
-                        Text(selectedDirectory?.path ?? "未選択")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .foregroundStyle(selectedDirectory == nil ? .secondary : .primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("選択...") {
-                            selectDirectory()
+                    // 入力ソース選択
+                    sectionHeader("入力形式")
+                    Picker("入力形式", selection: $inputSource) {
+                        ForEach(InputSource.allCases, id: \.self) { source in
+                            Text(source.displayName).tag(source)
                         }
-                        .disabled(isProcessing)
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(isProcessing)
+
+                    // ファイル/フォルダ選択
+                    switch inputSource {
+                    case .images:
+                        imageSourceSection
+                    case .markdown:
+                        markdownSourceSection
                     }
 
                     // タイトル
@@ -57,29 +85,31 @@ struct AddBookView: View {
                         .textFieldStyle(.roundedBorder)
                         .disabled(isProcessing)
 
-                    // 詳細設定（折りたたみ可能）
-                    DisclosureGroup("詳細設定", isExpanded: $showAdvanced) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader("Python 実行ファイル")
-                            HStack {
-                                TextField("/path/to/python3", text: $pythonExecutable)
-                                    .textFieldStyle(.roundedBorder)
-                                    .disabled(isProcessing)
-                                Button("選択...") { pickFile(title: "Python を選択",
-                                                            binding: $pythonExecutable) }
-                                    .disabled(isProcessing)
-                            }
+                    // 詳細設定（画像モード時のみ）
+                    if inputSource == .images {
+                        DisclosureGroup("詳細設定", isExpanded: $showAdvanced) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                sectionHeader("Python 実行ファイル")
+                                HStack {
+                                    TextField("/path/to/python3", text: $pythonExecutable)
+                                        .textFieldStyle(.roundedBorder)
+                                        .disabled(isProcessing)
+                                    Button("選択...") { pickFile(title: "Python を選択",
+                                                                binding: $pythonExecutable) }
+                                        .disabled(isProcessing)
+                                }
 
-                            sectionHeader("スクリプトディレクトリ")
-                            HStack {
-                                TextField("/path/to/scripts", text: $scriptsDirectory)
-                                    .textFieldStyle(.roundedBorder)
-                                    .disabled(isProcessing)
-                                Button("選択...") { pickScriptsDir() }
-                                    .disabled(isProcessing)
+                                sectionHeader("スクリプトディレクトリ")
+                                HStack {
+                                    TextField("/path/to/scripts", text: $scriptsDirectory)
+                                        .textFieldStyle(.roundedBorder)
+                                        .disabled(isProcessing)
+                                    Button("選択...") { pickScriptsDir() }
+                                        .disabled(isProcessing)
+                                }
                             }
+                            .padding(.top, 8)
                         }
-                        .padding(.top, 8)
                     }
 
                     // 進捗表示
@@ -118,11 +148,47 @@ struct AddBookView: View {
                     startProcessing()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isProcessing || title.isEmpty || selectedDirectory == nil)
+                .disabled(!canAdd)
             }
             .padding()
         }
-        .frame(width: 500, height: 420)
+        .frame(width: 500, height: 460)
+    }
+
+    // MARK: - Source Sections
+
+    private var imageSourceSection: some View {
+        Group {
+            sectionHeader("画像フォルダ")
+            HStack {
+                Text(selectedDirectory?.path ?? "未選択")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(selectedDirectory == nil ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("選択...") {
+                    selectDirectory()
+                }
+                .disabled(isProcessing)
+            }
+        }
+    }
+
+    private var markdownSourceSection: some View {
+        Group {
+            sectionHeader("Markdown ファイル")
+            HStack {
+                Text(selectedMarkdownFile?.lastPathComponent ?? "未選択")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(selectedMarkdownFile == nil ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button("選択...") {
+                    selectMarkdownFile()
+                }
+                .disabled(isProcessing)
+            }
+        }
     }
 
     // MARK: - UI Helpers
@@ -145,6 +211,21 @@ struct AddBookView: View {
             selectedDirectory = url
             if title.isEmpty {
                 title = url.lastPathComponent
+            }
+        }
+    }
+
+    private func selectMarkdownFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Markdown ファイルを選択"
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        if panel.runModal() == .OK, let url = panel.url {
+            selectedMarkdownFile = url
+            if title.isEmpty {
+                title = url.deletingPathExtension().lastPathComponent
             }
         }
     }
@@ -172,11 +253,20 @@ struct AddBookView: View {
     // MARK: - Processing
 
     private func startProcessing() {
-        guard let dir = selectedDirectory else { return }
         errorMessage = ""
         progressMessage = ""
         isProcessing = true
 
+        switch inputSource {
+        case .images:
+            startImageProcessing()
+        case .markdown:
+            startMarkdownProcessing()
+        }
+    }
+
+    private func startImageProcessing() {
+        guard let dir = selectedDirectory else { return }
         libraryManager.addBook(
             title: title,
             sourceImagesDirectory: dir,
@@ -187,6 +277,26 @@ struct AddBookView: View {
                     self.progressMessage = msg
                 }
             },
+            onComplete: { success, errMsg in
+                Task { @MainActor in
+                    self.isProcessing = false
+                    if success {
+                        self.dismiss()
+                    } else {
+                        self.errorMessage = errMsg
+                    }
+                }
+            }
+        )
+    }
+
+    private func startMarkdownProcessing() {
+        guard let fileURL = selectedMarkdownFile else { return }
+        progressMessage = "Markdown を解析中..."
+
+        libraryManager.addMarkdownBook(
+            title: title,
+            sourceFile: fileURL,
             onComplete: { success, errMsg in
                 Task { @MainActor in
                     self.isProcessing = false

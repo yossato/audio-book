@@ -13,6 +13,7 @@ struct ViewerView: View {
     @State private var currentPageIndex = 0
     @State private var audioManager = AudioPlayerManager()
     @State private var showSettings = false
+    @State private var isFullscreen = false
 
     var body: some View {
         Group {
@@ -62,73 +63,102 @@ struct ViewerView: View {
 
     private func viewerContent(book: Book) -> some View {
         VStack(spacing: 0) {
-            // タイトルバー（ライブラリから開いた場合のみ「戻る」を表示）
-            HStack {
-                if onClose != nil {
-                    Button {
-                        onClose?()
-                    } label: {
-                        Label("ライブラリ", systemImage: "chevron.left")
+            // タイトルバー（全画面時は非表示）
+            if !isFullscreen {
+                titleBar(book: book)
+                Divider()
+            }
+
+            // ページコンテンツ
+            #if os(iOS)
+            TabView(selection: $currentPageIndex) {
+                ForEach(Array(book.pages.enumerated()), id: \.offset) { index, page in
+                    ZoomableContainer(pageIndex: currentPageIndex) {
+                        pageContent(page: page, book: book)
                     }
-                    .buttonStyle(.borderless)
-                }
-                Spacer()
-                Text(book.title)
-                    .fontWeight(.semibold)
-                Spacer()
-                Button {
-                    showSettings.toggle()
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .buttonStyle(.borderless)
-                #if os(macOS)
-                .popover(isPresented: $showSettings) {
-                    ReadingSettingsView()
-                        .frame(width: 480, height: 550)
-                }
-                #endif
-                .onChange(of: showSettings) { _, isShowing in
-                    if !isShowing {
-                        #if os(macOS)
-                        startIrodoriServerIfNeeded()
-                        #endif
-                        loadPageAudio()
-                    }
+                    .tag(index)
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.bar)
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .onChange(of: currentPageIndex) { oldValue, newValue in
+                guard oldValue != newValue else { return }
+                audioManager.stop()
+                loadPageAudio()
+                saveReadingPosition()
+            }
+            #else
+            pageContent(page: book.pages[currentPageIndex], book: book)
+            #endif
 
-            Divider()
-
-            // ページ画像 + バウンディングボックス
-            let page = book.pages[currentPageIndex]
-            PageImageView(
-                imagePath: page.imagePath,
-                blocks: page.blocks,
-                activeBlockId: audioManager.activeBlockId,
-                onBlockTapped: { block in
-                    audioManager.seekToBlock(block)
-                }
-            )
-
-            Divider()
-
-            // 再生コントロール
-            PlayerControlsView(
-                audioManager: audioManager,
-                pageIndex: currentPageIndex,
-                totalPages: book.pages.count,
-                onPrevPage: { goToPage(currentPageIndex - 1) },
-                onNextPage: { goToPage(currentPageIndex + 1) },
-                onPageChange: { goToPage($0) }
-            )
+            // プレイヤーコントロール（全画面時は非表示）
+            if !isFullscreen {
+                Divider()
+                PlayerControlsView(
+                    audioManager: audioManager,
+                    pageIndex: currentPageIndex,
+                    totalPages: book.pages.count,
+                    onPrevPage: { goToPage(currentPageIndex - 1) },
+                    onNextPage: { goToPage(currentPageIndex + 1) },
+                    onPageChange: { goToPage($0) }
+                )
+            }
         }
         #if os(macOS)
         .frame(minWidth: 800, minHeight: 600)
         #endif
+        #if os(iOS)
+        .statusBarHidden(isFullscreen)
+        #endif
+        .onAppear {
+            audioManager.onPlaybackFinished = {
+                if currentPageIndex < (self.book?.pages.count ?? 0) - 1 {
+                    goToPage(currentPageIndex + 1)
+                    audioManager.play()
+                }
+            }
+        }
+    }
+
+    // MARK: - Title Bar
+
+    private func titleBar(book: Book) -> some View {
+        HStack {
+            if onClose != nil {
+                Button {
+                    onClose?()
+                } label: {
+                    Label("ライブラリ", systemImage: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+            }
+            Spacer()
+            Text(book.title)
+                .fontWeight(.semibold)
+            Spacer()
+            Button {
+                showSettings.toggle()
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .buttonStyle(.borderless)
+            #if os(macOS)
+            .popover(isPresented: $showSettings) {
+                ReadingSettingsView()
+                    .frame(width: 480, height: 550)
+            }
+            #endif
+            .onChange(of: showSettings) { _, isShowing in
+                if !isShowing {
+                    #if os(macOS)
+                    startIrodoriServerIfNeeded()
+                    #endif
+                    loadPageAudio()
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.bar)
         #if os(iOS)
         .sheet(isPresented: $showSettings) {
             NavigationStack {
@@ -142,13 +172,39 @@ struct ViewerView: View {
             }
         }
         #endif
-        .onAppear {
-            audioManager.onPlaybackFinished = {
-                if currentPageIndex < (self.book?.pages.count ?? 0) - 1 {
-                    goToPage(currentPageIndex + 1)
-                    audioManager.play()
+    }
+
+    // MARK: - Page Content
+
+    @ViewBuilder
+    private func pageContent(page: Page, book: Book) -> some View {
+        if page.isMarkdownPage {
+            PageMarkdownView(
+                blocks: page.blocks,
+                activeBlockId: audioManager.activeBlockId,
+                onBlockTapped: { block in
+                    audioManager.seekToBlock(block)
+                },
+                onBackgroundTapped: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isFullscreen.toggle()
+                    }
                 }
-            }
+            )
+        } else {
+            PageImageView(
+                imagePath: page.imagePath ?? "",
+                blocks: page.blocks,
+                activeBlockId: audioManager.activeBlockId,
+                onBlockTapped: { block in
+                    audioManager.seekToBlock(block)
+                },
+                onBackgroundTapped: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isFullscreen.toggle()
+                    }
+                }
+            )
         }
     }
 
