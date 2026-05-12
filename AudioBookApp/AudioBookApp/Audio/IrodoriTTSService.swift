@@ -201,14 +201,22 @@ final class IrodoriTTSService {
         request.timeoutInterval = 180  // 初回はモデルロードで時間がかかる
 
         let refWavPath = ReadingSettings.shared.irodoriRefWavPath
-        let voice = refWavPath.isEmpty ? "no-ref" : refWavPath
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": "mlx-community/Irodori-TTS-500M-v2-fp16",
             "input": text,
-            "voice": voice,
             "response_format": "wav",
         ]
+        if !refWavPath.isEmpty {
+            let exists = FileManager.default.fileExists(atPath: refWavPath)
+            print("[IrodoriTTS] ref_audio=\(refWavPath) (exists=\(exists))")
+            body["ref_audio"] = refWavPath
+        } else {
+            print("[IrodoriTTS] ref_audio not set, using random voice")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if let jsonStr = String(data: request.httpBody!, encoding: .utf8) {
+            print("[IrodoriTTS] Request body: \(jsonStr)")
+        }
 
         let (data, response) = try await session.data(for: request)
 

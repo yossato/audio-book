@@ -169,6 +169,21 @@ final class LibraryManager {
         try? FileManager.default.createDirectory(at: libraryRoot, withIntermediateDirectories: true)
         startAccessIfNeeded()
         loadLibrary()
+        recoverStuckBooks()
+    }
+
+    /// アプリ終了等で処理中のまま残ったブックを ready に復帰させる
+    private func recoverStuckBooks() {
+        var changed = false
+        for i in books.indices {
+            if books[i].status == .ttsProcessing || books[i].status == .ocrProcessing || books[i].status == .importing {
+                books[i].status = .ready
+                changed = true
+            }
+        }
+        if changed {
+            saveLibrary()
+        }
     }
 
     // MARK: - External Library Folder
@@ -536,6 +551,42 @@ final class LibraryManager {
                                                        properties: [.compressionFactor: 0.85]) else { return }
         let coverURL = bookDir.appendingPathComponent("cover.jpg")
         try? jpegData.write(to: coverURL)
+    }
+
+    // MARK: Delete Audio
+
+    /// 生成済み音声ファイルを削除し、book.json から audio_path を除去する
+    func deleteGeneratedAudio(entry: BookEntry) {
+        let dir = bookDirectory(for: entry)
+
+        // audio/ ディレクトリを削除
+        let audioDir = dir.appendingPathComponent("audio")
+        if FileManager.default.fileExists(atPath: audioDir.path) {
+            try? FileManager.default.removeItem(at: audioDir)
+        }
+
+        // book.json から audio_path を除去
+        let bookJsonURL = dir.appendingPathComponent("book.json")
+        guard FileManager.default.fileExists(atPath: bookJsonURL.path),
+              var jsonDict = try? JSONSerialization.jsonObject(
+                  with: Data(contentsOf: bookJsonURL)) as? [String: Any],
+              var pages = jsonDict["pages"] as? [[String: Any]] else {
+            return
+        }
+        for i in pages.indices {
+            pages[i].removeValue(forKey: "audio_path")
+        }
+        jsonDict["pages"] = pages
+        if let data = try? JSONSerialization.data(withJSONObject: jsonDict, options: [.prettyPrinted, .sortedKeys]) {
+            try? data.write(to: bookJsonURL)
+        }
+        print("[LibraryManager] Deleted generated audio for: \(entry.title)")
+    }
+
+    /// 指定ブックに生成済み音声があるかチェック
+    func hasGeneratedAudio(entry: BookEntry) -> Bool {
+        let audioDir = bookDirectory(for: entry).appendingPathComponent("audio")
+        return FileManager.default.fileExists(atPath: audioDir.path)
     }
 
     // MARK: Delete

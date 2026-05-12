@@ -4,10 +4,39 @@ import UniformTypeIdentifiers
 /// 読み上げ設定画面
 struct ReadingSettingsView: View {
     @Bindable var settings = ReadingSettings.shared
+    var libraryManager: LibraryManager? = nil
 
     var body: some View {
         Form {
             #if os(macOS)
+            if let libraryManager {
+                Section("ライブラリ") {
+                    LabeledContent("保存先") {
+                        HStack {
+                            Text(libraryManager.libraryRoot.path)
+                                .font(.system(.body, design: .monospaced))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 300, alignment: .leading)
+                            Button("変更...") {
+                                let panel = NSOpenPanel()
+                                panel.canChooseDirectories = true
+                                panel.canChooseFiles = false
+                                panel.allowsMultipleSelection = false
+                                panel.message = "ライブラリフォルダを選択"
+                                if panel.runModal() == .OK, let url = panel.url {
+                                    libraryManager.setLibraryRoot(path: url.path)
+                                }
+                            }
+                        }
+                    }
+                    Button("iCloud Drive に設定") {
+                        libraryManager.setLibraryRoot(path: LibraryManager.iCloudDrivePath)
+                    }
+                    .disabled(libraryManager.libraryRoot.path == LibraryManager.iCloudDrivePath)
+                }
+            }
+
             Section("TTS エンジン") {
                 Picker("音声エンジン", selection: $settings.ttsEngine) {
                     ForEach(TTSEngine.allCases, id: \.self) { engine in
@@ -62,7 +91,7 @@ struct ReadingSettingsView: View {
                             }
                         }
                     }
-                    Text("mlx-audio サーバーはアプリ起動時に自動起動します。リファレンス音声を設定すると、バッチ生成時に話者を固定できます。")
+                    Text("リファレンス音声を設定すると、バッチ生成時に話者を固定できます。サーバーはバッチ音声生成時のみ起動します。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

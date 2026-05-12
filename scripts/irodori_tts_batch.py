@@ -171,9 +171,13 @@ def tts_generate(
     body: dict = {
         "model": model,
         "input": text,
-        "voice": ref_wav if ref_wav else voice,
         "response_format": "wav",
     }
+    if ref_wav:
+        body["ref_audio"] = ref_wav
+        print(f"[DEBUG] Using ref_audio: {ref_wav}")
+    else:
+        body["voice"] = voice
 
     data = json.dumps(body).encode("utf-8")
     req = Request(url, data=data, headers={"Content-Type": "application/json"})

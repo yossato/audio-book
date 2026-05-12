@@ -4,6 +4,8 @@ struct LibraryView: View {
     @Bindable var libraryManager: LibraryManager
     var onBookSelected: (BookEntry) -> Void
 
+    @State private var showSettings = false
+
     #if os(macOS)
     @State private var showAddBook = false
     @State private var bookToDelete: BookEntry?
@@ -60,6 +62,13 @@ struct LibraryView: View {
                                                 Label("TTS生成をキャンセル", systemImage: "xmark.circle")
                                             }
                                         }
+                                        if libraryManager.hasGeneratedAudio(entry: entry) {
+                                            Button(role: .destructive) {
+                                                libraryManager.deleteGeneratedAudio(entry: entry)
+                                            } label: {
+                                                Label("生成済み音声を削除", systemImage: "speaker.slash")
+                                            }
+                                        }
                                         Button(role: .destructive) {
                                             bookToDelete = entry
                                             showDeleteConfirm = true
@@ -79,6 +88,18 @@ struct LibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .help("設定")
+                    .popover(isPresented: $showSettings) {
+                        ReadingSettingsView(libraryManager: libraryManager)
+                            .frame(width: 480, height: 550)
+                    }
+                }
+                ToolbarItem(placement: .automatic) {
+                    Button {
                         showAddBook = true
                     } label: {
                         Image(systemName: "plus")
@@ -88,6 +109,14 @@ struct LibraryView: View {
             }
             #else
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .help("設定")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showFolderPicker = true
@@ -95,6 +124,17 @@ struct LibraryView: View {
                         Image(systemName: "folder.badge.plus")
                     }
                     .help("ライブラリフォルダを選択")
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    ReadingSettingsView(libraryManager: libraryManager)
+                        .navigationTitle("設定")
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完了") { showSettings = false }
+                            }
+                        }
                 }
             }
             .fileImporter(

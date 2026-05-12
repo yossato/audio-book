@@ -26,19 +26,12 @@ struct ViewerView: View {
         }
         .onAppear {
             loadContent()
-            #if os(macOS)
-            startIrodoriServerIfNeeded()
-            #endif
         }
         .onDisappear {
             saveReadingPosition()
             audioManager.stop()
             #if os(macOS)
             IrodoriTTSService.shared.clearCache()
-            // バッチTTS実行中はサーバーを停止しない
-            if libraryManager?.ttsGeneratingBookId == nil {
-                IrodoriTTSService.shared.stopServer()
-            }
             #endif
         }
     }
@@ -149,9 +142,6 @@ struct ViewerView: View {
             #endif
             .onChange(of: showSettings) { _, isShowing in
                 if !isShowing {
-                    #if os(macOS)
-                    startIrodoriServerIfNeeded()
-                    #endif
                     loadPageAudio()
                 }
             }
@@ -228,46 +218,7 @@ struct ViewerView: View {
             pageInfo: "ページ \(currentPageIndex + 1) / \(book.pages.count)"
         )
 
-        #if os(macOS)
-        // Irodori TTS: 次ページの先読み生成
-        if ReadingSettings.shared.ttsEngine == .irodori {
-            pregenerateNextPage()
-        }
-        #endif
     }
-
-    #if os(macOS)
-    /// 次ページのチャンクを先行生成する
-    private func pregenerateNextPage() {
-        guard let book else { return }
-        let nextIndex = currentPageIndex + 1
-        guard nextIndex < book.pages.count else { return }
-        let nextPage = book.pages[nextIndex]
-        if let audioPath = nextPage.audioPath,
-           FileManager.default.fileExists(atPath: audioPath) { return }
-        let readableBlocks = nextPage.blocks.filter { ReadingSettings.shared.shouldRead(block: $0) }
-        let chunks = IrodoriChunkBuilder.buildChunks(from: readableBlocks)
-        Task {
-            await IrodoriTTSService.shared.pregenerate(chunks: chunks)
-        }
-    }
-
-    // MARK: - Irodori Server
-
-    private func startIrodoriServerIfNeeded() {
-        guard ReadingSettings.shared.ttsEngine == .irodori else { return }
-        Task {
-            do {
-                try await IrodoriTTSService.shared.startServer()
-                await IrodoriTTSService.shared.warmup()
-                let chunks = audioManager.irodoriChunksForPregeneration
-                await IrodoriTTSService.shared.pregenerate(chunks: chunks)
-            } catch {
-                print("[ViewerView] Irodori サーバー起動失敗: \(error)")
-            }
-        }
-    }
-    #endif
 
     // MARK: - Reading Position
 
