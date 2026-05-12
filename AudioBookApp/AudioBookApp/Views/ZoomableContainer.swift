@@ -18,7 +18,9 @@ struct ZoomableContainer<Content: View>: View {
             .scaleEffect(scale)
             .offset(offset)
             .gesture(magnificationGesture)
-            .gesture(panGesture)
+            .if(scale > 1.0) { view in
+                view.gesture(panGesture)
+            }
             .onTapGesture(count: 2) {
                 if scale > 1.0 {
                     resetZoom()
@@ -71,6 +73,19 @@ struct ZoomableContainer<Content: View>: View {
             lastScale = 1.0
             offset = .zero
             lastOffset = .zero
+        }
+    }
+}
+
+// MARK: - View Extension for Conditional Modifiers
+
+extension View {
+    @ViewBuilder
+    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
         }
     }
 }

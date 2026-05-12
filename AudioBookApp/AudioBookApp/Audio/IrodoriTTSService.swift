@@ -53,9 +53,16 @@ final class IrodoriTTSService {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
-        // 環境変数: venv 内のパスを優先
+        // 作業ディレクトリをユーザーのホームディレクトリに設定
+        process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+
+        // 環境変数: venv を完全にシミュレート
         var env = ProcessInfo.processInfo.environment
-        env["PATH"] = (venvPath as NSString).appendingPathComponent("bin") + ":" + (env["PATH"] ?? "")
+        let venvBinPath = (venvPath as NSString).appendingPathComponent("bin")
+        env["VIRTUAL_ENV"] = venvPath
+        env["PATH"] = venvBinPath + ":" + (env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin")
+        // PYTHONHOME を削除（venv 使用時は不要・競合の原因）
+        env.removeValue(forKey: "PYTHONHOME")
         process.environment = env
 
         do {
