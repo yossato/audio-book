@@ -188,6 +188,45 @@ final class LibraryManager {
 
     // MARK: - External Library Folder
 
+    // MARK: - Reference Voices
+
+    /// リファレンス音声の保存ディレクトリ
+    var refVoicesDirectory: URL {
+        libraryRoot.appendingPathComponent("ref_voices")
+    }
+
+    /// 保存済みリファレンス音声のファイル名一覧を返す
+    func listRefVoices() -> [String] {
+        let dir = refVoicesDirectory
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else {
+            return []
+        }
+        return files.filter { $0.hasSuffix(".wav") }.sorted()
+    }
+
+    /// リファレンス音声ファイルをライブラリにコピーし、保存先パスを返す
+    @discardableResult
+    func addRefVoice(from sourceURL: URL) -> String? {
+        let dir = refVoicesDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let destURL = dir.appendingPathComponent(sourceURL.lastPathComponent)
+        // 同名ファイルがあれば上書き
+        try? FileManager.default.removeItem(at: destURL)
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destURL)
+            print("[LibraryManager] Copied ref voice: \(sourceURL.lastPathComponent)")
+            return destURL.path
+        } catch {
+            print("[LibraryManager] Failed to copy ref voice: \(error)")
+            return nil
+        }
+    }
+
+    /// リファレンス音声のファイル名からフルパスを返す
+    func refVoicePath(for filename: String) -> String {
+        refVoicesDirectory.appendingPathComponent(filename).path
+    }
+
     #if os(macOS)
     /// ライブラリルートを変更する (macOS)
     func setLibraryRoot(path: String) {
