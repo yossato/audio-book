@@ -4,8 +4,11 @@ import SwiftUI
 struct PageMarkdownView: View {
     let blocks: [TextBlock]
     let activeBlockId: Int
+    var initialScrollBlockId: Int?
     var onBlockTapped: ((TextBlock) -> Void)?
     var onBackgroundTapped: (() -> Void)?
+
+    @State private var hasScrolledToInitial = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -39,6 +42,15 @@ struct PageMarkdownView: View {
                         }
                 )
             }
+            .onAppear {
+                // 前回の読書位置にスクロール
+                if !hasScrolledToInitial, let blockId = initialScrollBlockId, blockId > 0 {
+                    hasScrolledToInitial = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        proxy.scrollTo(blockId, anchor: .top)
+                    }
+                }
+            }
             .onChange(of: activeBlockId) { _, newId in
                 guard newId >= 0 else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -66,6 +78,15 @@ struct PageMarkdownView: View {
             blockquoteView(block: block)
         case "list_item":
             listItemView(block: block)
+        case "image":
+            imageView(block: block)
+        case "mermaid":
+            MermaidView(code: block.text)
+        case "table":
+            tableView(block: block)
+        case "hr":
+            Divider()
+                .padding(.vertical, 4)
         default:
             paragraphView(block: block)
         }
@@ -138,5 +159,99 @@ struct PageMarkdownView: View {
             .lineSpacing(4)
         }
         .padding(.leading, 12)
+    }
+
+    private func imageView(block: TextBlock) -> some View {
+        Group {
+            if let path = block.imagePath, let img = loadImage(from: path) {
+                img
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .cornerRadius(4)
+            } else {
+                // 画像が見つからない場合は alt テキストを表示
+                Text(block.text.isEmpty ? "画像" : block.text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.gray.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func tableView(block: TextBlock) -> some View {
+        let rows = parseTableRows(block.rawMarkdown ?? "")
+        if rows.isEmpty {
+            Text(block.text).font(.body)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                    HStack(spacing: 0) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                            Group {
+                                if let attr = try? AttributedString(markdown: cell) {
+                                    Text(attr)
+                                        .font(rowIndex == 0 ? .system(.body, weight: .bold) : .body)
+                                } else {
+                                    Text(cell)
+                                        .font(rowIndex == 0 ? .system(.body, weight: .bold) : .body)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(rowIndex == 0
+                                ? Color.gray.opacity(0.15)
+                                : (rowIndex % 2 == 0 ? Color.gray.opacity(0.05) : Color.clear))
+                        }
+                    }
+                    if rowIndex < rows.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+    }
+
+    /// Markdown テーブルのraw文字列からデータ行を解析する
+    private func parseTableRows(_ raw: String) -> [[String]] {
+        raw.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { line in
+                guard line.hasPrefix("|") else { return false }
+                // セパレータ行（|---|---| など）を除外
+                let content = line
+                    .replacingOccurrences(of: "|", with: "")
+                    .replacingOccurrences(of: "-", with: "")
+                    .replacingOccurrences(of: ":", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+                return !content.isEmpty
+            }
+            .map { line in
+                line.components(separatedBy: "|")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    /// ファイルパスから Image を読み込む（macOS / iOS 共通）
+    private func loadImage(from path: String) -> Image? {
+        #if canImport(AppKit)
+        guard let nsImg = NSImage(contentsOfFile: path) else { return nil }
+        return Image(nsImage: nsImg)
+        #else
+        guard let uiImg = UIImage(contentsOfFile: path) else { return nil }
+        return Image(uiImage: uiImg)
+        #endif
     }
 }

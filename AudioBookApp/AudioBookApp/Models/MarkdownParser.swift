@@ -13,27 +13,19 @@ struct MarkdownParser {
         return parse(content: content, title: title)
     }
 
-    /// Markdown テキストを Book に変換する
+    /// Markdown テキストを Book に変換する（全コンテンツを1ページとして返す）
     static func parse(content: String, title: String) -> Book {
-        let sections = splitIntoPages(content: content)
-        var pages: [Page] = []
-        var blockId = 0
+        let blocks = parseBlocks(from: content, heading: nil, startId: 0)
 
-        for (index, section) in sections.enumerated() {
-            let blocks = parseBlocks(from: section.body, heading: section.heading, startId: blockId)
-            blockId += blocks.count
+        let page = Page(
+            pageNumber: 0,
+            imagePath: nil,
+            audioPath: nil,
+            blocks: blocks,
+            contentType: "markdown"
+        )
 
-            let page = Page(
-                pageNumber: index,
-                imagePath: nil,
-                audioPath: nil,
-                blocks: blocks,
-                contentType: "markdown"
-            )
-            pages.append(page)
-        }
-
-        return Book(title: title, pages: pages)
+        return Book(title: title, pages: [page])
     }
 
     // MARK: - Page Splitting
@@ -109,8 +101,78 @@ struct MarkdownParser {
                 continue
             }
 
+            // 独立行の画像（![alt](path)）
+            if let imgMatch = parseImage(trimmed) {
+                blocks.append(TextBlock(
+                    id: id,
+                    text: imgMatch.alt,
+                    type: "本文",
+                    markdownType: "image",
+                    rawMarkdown: trimmed,
+                    imagePath: imgMatch.path
+                ))
+                id += 1
+                i += 1
+                continue
+            }
+
+            // 水平線（--- / *** / ___）
+            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                blocks.append(TextBlock(
+                    id: id,
+                    text: "",
+                    type: "本文",
+                    markdownType: "hr"
+                ))
+                id += 1
+                i += 1
+                continue
+            }
+
+            // テーブル（| で始まる行）
+            if trimmed.hasPrefix("|") {
+                var tableLines: [String] = []
+                while i < lines.count {
+                    let l = lines[i].trimmingCharacters(in: .whitespaces)
+                    if l.hasPrefix("|") {
+                        tableLines.append(l)
+                        i += 1
+                    } else {
+                        break
+                    }
+                }
+                let rawTable = tableLines.joined(separator: "\n")
+                // セパレータ行（|---|---| など）を除いたデータ行
+                let dataLines = tableLines.filter { row in
+                    let content = row
+                        .replacingOccurrences(of: "|", with: "")
+                        .replacingOccurrences(of: "-", with: "")
+                        .replacingOccurrences(of: ":", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+                    return !content.isEmpty
+                }
+                // TTS 用テキスト: 全セル内容を連結
+                let plainText = dataLines.flatMap { row -> [String] in
+                    row.components(separatedBy: "|")
+                        .map { stripInlineMarkdown($0.trimmingCharacters(in: .whitespaces)) }
+                        .filter { !$0.isEmpty }
+                }.joined(separator: " ")
+                if !plainText.isEmpty {
+                    blocks.append(TextBlock(
+                        id: id,
+                        text: plainText,
+                        type: "本文",
+                        markdownType: "table",
+                        rawMarkdown: rawTable
+                    ))
+                    id += 1
+                }
+                continue
+            }
+
             // コードブロック（```）
             if trimmed.hasPrefix("```") {
+                let language = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces).lowercased()
                 var codeLines: [String] = []
                 i += 1
                 while i < lines.count && !lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
@@ -120,13 +182,23 @@ struct MarkdownParser {
                 if i < lines.count { i += 1 } // ``` 閉じ行をスキップ
                 let codeText = codeLines.joined(separator: "\n")
                 if !codeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    blocks.append(TextBlock(
-                        id: id,
-                        text: codeText,
-                        type: "コードブロック",
-                        markdownType: "code_block",
-                        rawMarkdown: "```\n\(codeText)\n```"
-                    ))
+                    if language == "mermaid" {
+                        blocks.append(TextBlock(
+                            id: id,
+                            text: codeText,
+                            type: "本文",
+                            markdownType: "mermaid",
+                            rawMarkdown: codeText
+                        ))
+                    } else {
+                        blocks.append(TextBlock(
+                            id: id,
+                            text: codeText,
+                            type: "コードブロック",
+                            markdownType: "code_block",
+                            rawMarkdown: "```\(language.isEmpty ? "" : language)\n\(codeText)\n```"
+                        ))
+                    }
                     id += 1
                 }
                 continue
@@ -179,7 +251,9 @@ struct MarkdownParser {
             var paragraphLines: [String] = []
             while i < lines.count {
                 let l = lines[i].trimmingCharacters(in: .whitespaces)
-                if l.isEmpty || l.hasPrefix("#") || l.hasPrefix("```") || l.hasPrefix("> ") || isListItem(l) {
+                if l.isEmpty || l.hasPrefix("#") || l.hasPrefix("```") || l.hasPrefix("> ")
+                    || l.hasPrefix("|") || l == "---" || l == "***" || l == "___"
+                    || isListItem(l) || parseImage(l) != nil {
                     break
                 }
                 paragraphLines.append(l)
@@ -210,6 +284,11 @@ struct MarkdownParser {
         let text: String
     }
 
+    private struct ImageMatch {
+        let alt: String
+        let path: String
+    }
+
     private static func parseHeading(_ line: String) -> HeadingMatch? {
         var level = 0
         for char in line {
@@ -219,6 +298,23 @@ struct MarkdownParser {
         let rest = line.dropFirst(level).trimmingCharacters(in: .whitespaces)
         guard !rest.isEmpty else { return nil }
         return HeadingMatch(level: level, text: rest)
+    }
+
+    /// `![alt](path)` 形式の独立行画像を解析する
+    private static func parseImage(_ line: String) -> ImageMatch? {
+        guard line.hasPrefix("![") else { return nil }
+        let pattern = #"^!\[([^\]]*)\]\(([^)]+)\)$"#
+        guard let range = line.range(of: pattern, options: .regularExpression) else { return nil }
+        _ = range
+        // NSRegularExpression でキャプチャグループを取得
+        let regex = try? NSRegularExpression(pattern: pattern)
+        let nsLine = line as NSString
+        if let match = regex?.firstMatch(in: line, range: NSRange(location: 0, length: nsLine.length)) {
+            let alt = nsLine.substring(with: match.range(at: 1))
+            let path = nsLine.substring(with: match.range(at: 2))
+            return ImageMatch(alt: alt, path: path)
+        }
+        return nil
     }
 
     private static func isListItem(_ line: String) -> Bool {
