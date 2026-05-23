@@ -14,6 +14,7 @@ struct ViewerView: View {
     @State private var audioManager = AudioPlayerManager()
     @State private var showSettings = false
     @State private var isFullscreen = false
+    @State private var initialScrollBlockId: Int?
 
     var body: some View {
         Group {
@@ -45,6 +46,10 @@ struct ViewerView: View {
             if let entry {
                 let page = min(entry.lastReadPage, (book?.pages.count ?? 1) - 1)
                 currentPageIndex = max(0, page)
+                // マークダウンブックの場合、前回のブロック位置を復元
+                if let book, book.isMarkdownBook, entry.lastReadBlockId > 0 {
+                    initialScrollBlockId = entry.lastReadBlockId
+                }
             }
             loadPageAudio()
         } catch {
@@ -63,25 +68,43 @@ struct ViewerView: View {
             }
 
             // ページコンテンツ
-            #if os(iOS)
-            TabView(selection: $currentPageIndex) {
-                ForEach(Array(book.pages.enumerated()), id: \.offset) { index, page in
-                    ZoomableContainer(pageIndex: currentPageIndex) {
-                        pageContent(page: page, book: book)
+            if book.isMarkdownBook {
+                // マークダウンブック: 全ページのブロックを結合して縦スクロール表示
+                let allBlocks = book.pages.flatMap { $0.blocks }
+                PageMarkdownView(
+                    blocks: allBlocks,
+                    activeBlockId: audioManager.activeBlockId,
+                    initialScrollBlockId: initialScrollBlockId,
+                    onBlockTapped: { block in
+                        audioManager.seekToBlock(block)
+                    },
+                    onBackgroundTapped: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isFullscreen.toggle()
+                        }
                     }
-                    .tag(index)
+                )
+            } else {
+                #if os(iOS)
+                TabView(selection: $currentPageIndex) {
+                    ForEach(Array(book.pages.enumerated()), id: \.offset) { index, page in
+                        ZoomableContainer(pageIndex: currentPageIndex) {
+                            pageContent(page: page, book: book)
+                        }
+                        .tag(index)
+                    }
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .onChange(of: currentPageIndex) { oldValue, newValue in
+                    guard oldValue != newValue else { return }
+                    audioManager.stop()
+                    loadPageAudio()
+                    saveReadingPosition()
+                }
+                #else
+                pageContent(page: book.pages[currentPageIndex], book: book)
+                #endif
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .onChange(of: currentPageIndex) { oldValue, newValue in
-                guard oldValue != newValue else { return }
-                audioManager.stop()
-                loadPageAudio()
-                saveReadingPosition()
-            }
-            #else
-            pageContent(page: book.pages[currentPageIndex], book: book)
-            #endif
 
             // プレイヤーコントロール（全画面時は非表示）
             if !isFullscreen {
@@ -90,6 +113,7 @@ struct ViewerView: View {
                     audioManager: audioManager,
                     pageIndex: currentPageIndex,
                     totalPages: book.pages.count,
+                    isMarkdownBook: book.isMarkdownBook,
                     onPrevPage: { goToPage(currentPageIndex - 1) },
                     onNextPage: { goToPage(currentPageIndex + 1) },
                     onPageChange: { goToPage($0) }
@@ -104,7 +128,8 @@ struct ViewerView: View {
         #endif
         .onAppear {
             audioManager.onPlaybackFinished = {
-                if currentPageIndex < (self.book?.pages.count ?? 0) - 1 {
+                guard let book = self.book, !book.isMarkdownBook else { return }
+                if currentPageIndex < book.pages.count - 1 {
                     goToPage(currentPageIndex + 1)
                     audioManager.play()
                 }
@@ -172,6 +197,7 @@ struct ViewerView: View {
             PageMarkdownView(
                 blocks: page.blocks,
                 activeBlockId: audioManager.activeBlockId,
+                initialScrollBlockId: initialScrollBlockId,
                 onBlockTapped: { block in
                     audioManager.seekToBlock(block)
                 },
@@ -210,14 +236,19 @@ struct ViewerView: View {
 
     private func loadPageAudio() {
         guard let book else { return }
-        let page = book.pages[currentPageIndex]
-        let url = page.audioPath.map { URL(fileURLWithPath: $0) }
-        audioManager.loadAudio(url: url, blocks: page.blocks)
-        audioManager.updateNowPlaying(
-            title: book.title,
-            pageInfo: "ページ \(currentPageIndex + 1) / \(book.pages.count)"
-        )
-
+        if book.isMarkdownBook {
+            let allBlocks = book.pages.flatMap { $0.blocks }
+            audioManager.loadAudio(url: nil, blocks: allBlocks)
+            audioManager.updateNowPlaying(title: book.title, pageInfo: "")
+        } else {
+            let page = book.pages[currentPageIndex]
+            let url = page.audioPath.map { URL(fileURLWithPath: $0) }
+            audioManager.loadAudio(url: url, blocks: page.blocks)
+            audioManager.updateNowPlaying(
+                title: book.title,
+                pageInfo: "ページ \(currentPageIndex + 1) / \(book.pages.count)"
+            )
+        }
     }
 
     // MARK: - Reading Position
@@ -227,7 +258,8 @@ struct ViewerView: View {
         libraryManager.updateReadingPosition(
             bookId: entry.id,
             page: currentPageIndex,
-            position: audioManager.currentTime
+            position: audioManager.currentTime,
+            blockId: audioManager.activeBlockId
         )
     }
 }

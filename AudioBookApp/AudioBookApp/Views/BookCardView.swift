@@ -78,7 +78,10 @@ struct BookCardView: View {
         Group {
             switch entry.status {
             case .ready:
-                if entry.pageCount > 0 {
+                if entry.isMarkdown {
+                    Text("Markdown")
+                        .foregroundStyle(.secondary)
+                } else if entry.pageCount > 0 {
                     if entry.lastReadPage > 0 {
                         Text("\(entry.lastReadPage + 1) / \(entry.pageCount) P")
                     } else {

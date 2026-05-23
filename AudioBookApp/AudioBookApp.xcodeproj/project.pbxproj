@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AD000021 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = AC000021 /* mermaid.min.js */; };
+
 		AA000001 /* AudioBookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000001 /* AudioBookApp.swift */; };
 		AA000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000002 /* ContentView.swift */; };
 		AA000003 /* BookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000003 /* BookModel.swift */; };
@@ -25,6 +27,7 @@
 		AA000016 /* IrodoriChunkBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000016 /* IrodoriChunkBuilder.swift */; };
 		AA000017 /* PlatformImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000017 /* PlatformImage.swift */; };
 		AA000018 /* ZoomableContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000018 /* ZoomableContainer.swift */; };
+		AD000020 /* MermaidView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC000020 /* MermaidView.swift */; };
 		AA000019 /* PageMarkdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000019 /* PageMarkdownView.swift */; };
 		AA000020 /* MarkdownParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000020 /* MarkdownParser.swift */; };
 /* End PBXBuildFile section */
@@ -48,10 +51,12 @@
 		AB000016 /* IrodoriChunkBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IrodoriChunkBuilder.swift; sourceTree = "<group>"; };
 		AB000017 /* PlatformImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformImage.swift; sourceTree = "<group>"; };
 		AB000018 /* ZoomableContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableContainer.swift; sourceTree = "<group>"; };
+		AC000020 /* MermaidView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MermaidView.swift; sourceTree = "<group>"; };
 		AB000019 /* PageMarkdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageMarkdownView.swift; sourceTree = "<group>"; };
 		AB000020 /* MarkdownParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownParser.swift; sourceTree = "<group>"; };
 		AC000001 /* AudioBookApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioBookApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AC000002 /* AudioBookApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AudioBookApp.entitlements; sourceTree = "<group>"; };
+		AC000021 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = text.script.js; name = "mermaid.min.js"; path = "mermaid.min.js"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +83,7 @@
 			children = (
 				AB000001 /* AudioBookApp.swift */,
 				AC000002 /* AudioBookApp.entitlements */,
+				AE000007 /* Resources */,
 				AE000004 /* Views */,
 				AE000005 /* Models */,
 				AE000006 /* Audio */,
@@ -106,6 +112,7 @@
 				AB000014 /* ReadingSettingsView.swift */,
 				AB000017 /* PlatformImage.swift */,
 				AB000018 /* ZoomableContainer.swift */,
+				AC000020 /* MermaidView.swift */,
 				AB000019 /* PageMarkdownView.swift */,
 			);
 			path = Views;
@@ -133,6 +140,14 @@
 			path = Audio;
 			sourceTree = "<group>";
 		};
+		AE000007 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				AC000021 /* mermaid.min.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -140,6 +155,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B1000001 /* Build configuration list for PBXNativeTarget "AudioBookApp" */;
 			buildPhases = (
+				AF000003 /* Resources */,
 				AF000002 /* Sources */,
 				AD000001 /* Frameworks */,
 			);
@@ -153,6 +169,17 @@
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AF000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD000021 /* mermaid.min.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXProject section */
 		B0000001 /* Project object */ = {
@@ -204,6 +231,7 @@
 				AA000016 /* IrodoriChunkBuilder.swift in Sources */,
 				AA000017 /* PlatformImage.swift in Sources */,
 				AA000018 /* ZoomableContainer.swift in Sources */,
+				AD000020 /* MermaidView.swift in Sources */,
 				AA000019 /* PageMarkdownView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

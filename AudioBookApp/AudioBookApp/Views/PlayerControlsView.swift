@@ -4,6 +4,7 @@ struct PlayerControlsView: View {
     @Bindable var audioManager: AudioPlayerManager
     let pageIndex: Int
     let totalPages: Int
+    var isMarkdownBook: Bool = false
     var onPrevPage: () -> Void
     var onNextPage: () -> Void
     var onPageChange: (Int) -> Void
@@ -15,41 +16,45 @@ struct PlayerControlsView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // ページスライダー（Kindle 風）
-            HStack(spacing: 8) {
-                Text("\(displayPage)")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 40, alignment: .trailing)
+            if !isMarkdownBook {
+                // ページスライダー（Kindle 風）
+                HStack(spacing: 8) {
+                    Text("\(displayPage)")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 40, alignment: .trailing)
 
-                Slider(
-                    value: $sliderPage,
-                    in: 0...max(1, Double(totalPages - 1)),
-                    step: 1,
-                    onEditingChanged: { editing in
-                        isDragging = editing
-                        if !editing {
-                            onPageChange(Int(sliderPage))
+                    Slider(
+                        value: $sliderPage,
+                        in: 0...max(1, Double(totalPages - 1)),
+                        step: 1,
+                        onEditingChanged: { editing in
+                            isDragging = editing
+                            if !editing {
+                                onPageChange(Int(sliderPage))
+                            }
                         }
-                    }
-                )
+                    )
 
-                Text("/ \(totalPages)")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 50, alignment: .leading)
+                    Text("/ \(totalPages)")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50, alignment: .leading)
+                }
             }
 
             // コントロールボタン
             HStack(spacing: 16) {
-                Button(action: onPrevPage) {
-                    Image(systemName: "chevron.left")
-                        .font(.title2)
+                if !isMarkdownBook {
+                    Button(action: onPrevPage) {
+                        Image(systemName: "chevron.left")
+                            .font(.title2)
+                    }
+                    .disabled(pageIndex <= 0)
+                    #if os(macOS)
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    #endif
                 }
-                .disabled(pageIndex <= 0)
-                #if os(macOS)
-                .keyboardShortcut(.leftArrow, modifiers: [])
-                #endif
 
                 Button(action: { audioManager.togglePlayPause() }) {
                     if audioManager.isIrodoriGenerating {
@@ -65,14 +70,16 @@ struct PlayerControlsView: View {
                 .keyboardShortcut(.space, modifiers: [])
                 #endif
 
-                Button(action: onNextPage) {
-                    Image(systemName: "chevron.right")
-                        .font(.title2)
+                if !isMarkdownBook {
+                    Button(action: onNextPage) {
+                        Image(systemName: "chevron.right")
+                            .font(.title2)
+                    }
+                    .disabled(pageIndex >= totalPages - 1)
+                    #if os(macOS)
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+                    #endif
                 }
-                .disabled(pageIndex >= totalPages - 1)
-                #if os(macOS)
-                .keyboardShortcut(.rightArrow, modifiers: [])
-                #endif
 
                 Spacer()
 

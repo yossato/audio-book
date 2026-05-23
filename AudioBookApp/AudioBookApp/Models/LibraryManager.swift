@@ -315,10 +315,11 @@ final class LibraryManager {
 
     // MARK: Reading Position
 
-    func updateReadingPosition(bookId: String, page: Int, position: Double) {
+    func updateReadingPosition(bookId: String, page: Int, position: Double, blockId: Int = 0) {
         guard let idx = books.firstIndex(where: { $0.id == bookId }) else { return }
         books[idx].lastReadPage = page
         books[idx].lastReadPosition = position
+        books[idx].lastReadBlockId = blockId
         saveLibrary()
     }
 
@@ -519,18 +520,49 @@ final class LibraryManager {
             }
 
             // 3. Markdown パース → Book
-            let book = try MarkdownParser.parse(fileURL: sourceFile, title: title)
+            var book = try MarkdownParser.parse(fileURL: sourceFile, title: title)
 
-            // 4. book.json 書き出し
+            // 4. 画像ファイルをコピーし、ブロックの imagePath を更新
+            let sourceDir = sourceFile.deletingLastPathComponent()
+            let imagesDir = bookDir.appendingPathComponent("images")
+            var hasImages = false
+            for pi in book.pages.indices {
+                for bi in book.pages[pi].blocks.indices {
+                    guard book.pages[pi].blocks[bi].markdownType == "image",
+                          let origPath = book.pages[pi].blocks[bi].imagePath,
+                          !origPath.hasPrefix("http") else { continue }
+                    // 元 .md ファイルのディレクトリ基準でパスを解決
+                    let srcURL: URL
+                    if origPath.hasPrefix("/") {
+                        srcURL = URL(fileURLWithPath: origPath)
+                    } else {
+                        srcURL = sourceDir.appendingPathComponent(origPath)
+                    }
+                    guard FileManager.default.fileExists(atPath: srcURL.path) else { continue }
+                    if !hasImages {
+                        try FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+                        hasImages = true
+                    }
+                    let destName = srcURL.lastPathComponent
+                    let destURL = imagesDir.appendingPathComponent(destName)
+                    if !FileManager.default.fileExists(atPath: destURL.path) {
+                        try FileManager.default.copyItem(at: srcURL, to: destURL)
+                    }
+                    // book.json には相対パスで保存
+                    book.pages[pi].blocks[bi].imagePath = "images/\(destName)"
+                }
+            }
+
+            // 5. book.json 書き出し
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(book)
             try data.write(to: bookJSONPath, options: .atomic)
 
-            // 5. テキストカバー画像生成
+            // 6. テキストカバー画像生成
             generateTextCover(bookId: bookId, safeTitle: safeTitle, bookDir: bookDir, title: title)
 
-            // 6. ライブラリに追加
+            // 7. ライブラリに追加
             let entry = BookEntry(
                 id: bookId,
                 title: title,
@@ -539,6 +571,7 @@ final class LibraryManager {
                 pageCount: book.pages.count,
                 lastReadPage: 0,
                 lastReadPosition: 0.0,
+                isMarkdown: true,
                 status: .ready,
                 createdAt: formatter.string(from: Date())
             )

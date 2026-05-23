@@ -11,9 +11,10 @@ struct TextBlock: Codable, Identifiable {
     var audioEnd: Double?
 
     // Markdown 固有フィールド
-    let markdownType: String?    // "heading", "paragraph", "list_item", "code_block", "blockquote"
+    let markdownType: String?    // "heading", "paragraph", "list_item", "code_block", "blockquote", "image", "mermaid"
     let headingLevel: Int?       // 1-6 (見出しの場合)
     let rawMarkdown: String?     // 元の Markdown テキスト（表示用）
+    var imagePath: String?       // 画像ブロックのファイルパス（絶対パス、loadBook で解決）
 
     /// 本文として読み上げるべきブロックかどうか（設定に基づく）
     @MainActor var isReadable: Bool {
@@ -28,6 +29,7 @@ struct TextBlock: Codable, Identifiable {
         case markdownType = "markdown_type"
         case headingLevel = "heading_level"
         case rawMarkdown = "raw_markdown"
+        case imagePath = "image_path"
     }
 
     init(from decoder: Decoder) throws {
@@ -43,13 +45,15 @@ struct TextBlock: Codable, Identifiable {
         markdownType = try container.decodeIfPresent(String.self, forKey: .markdownType)
         headingLevel = try container.decodeIfPresent(Int.self, forKey: .headingLevel)
         rawMarkdown = try container.decodeIfPresent(String.self, forKey: .rawMarkdown)
+        imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath)
     }
 
     /// プログラムから直接生成するための init（Markdown パーサー用）
     init(id: Int, text: String, bbox: [Double]? = nil, confidence: Double = 1.0,
          isVertical: Bool = false, type: String = "本文",
          audioStart: Double? = nil, audioEnd: Double? = nil,
-         markdownType: String? = nil, headingLevel: Int? = nil, rawMarkdown: String? = nil) {
+         markdownType: String? = nil, headingLevel: Int? = nil, rawMarkdown: String? = nil,
+         imagePath: String? = nil) {
         self.id = id
         self.text = text
         self.bbox = bbox
@@ -61,6 +65,7 @@ struct TextBlock: Codable, Identifiable {
         self.markdownType = markdownType
         self.headingLevel = headingLevel
         self.rawMarkdown = rawMarkdown
+        self.imagePath = imagePath
     }
 }
 
@@ -106,6 +111,11 @@ struct Page: Codable {
 struct Book: Codable {
     let title: String
     var pages: [Page]
+
+    /// 全ページが Markdown コンテンツであるかどうか
+    var isMarkdownBook: Bool {
+        !pages.isEmpty && pages.allSatisfy { $0.isMarkdownPage }
+    }
 }
 
 /// book.json を読み込み、パスを解決する
@@ -120,6 +130,12 @@ func loadBook(from url: URL) throws -> Book {
         }
         if let audio = book.pages[i].audioPath {
             book.pages[i].audioPath = resolvePath(audio, base: baseDir)
+        }
+        // ブロックレベルの画像パスを解決（markdown image ブロック）
+        for j in book.pages[i].blocks.indices {
+            if let imgPath = book.pages[i].blocks[j].imagePath {
+                book.pages[i].blocks[j].imagePath = resolvePath(imgPath, base: baseDir)
+            }
         }
     }
     return book

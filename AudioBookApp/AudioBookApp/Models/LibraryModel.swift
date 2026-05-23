@@ -20,6 +20,8 @@ struct BookEntry: Codable, Identifiable {
     var pageCount: Int
     var lastReadPage: Int
     var lastReadPosition: Double
+    var lastReadBlockId: Int
+    var isMarkdown: Bool
     var status: BookStatus
     var createdAt: String
 
@@ -28,8 +30,42 @@ struct BookEntry: Codable, Identifiable {
         case pageCount = "page_count"
         case lastReadPage = "last_read_page"
         case lastReadPosition = "last_read_position"
+        case lastReadBlockId = "last_read_block_id"
+        case isMarkdown = "is_markdown"
         case status
         case createdAt = "created_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        directory = try container.decode(String.self, forKey: .directory)
+        cover = try container.decodeIfPresent(String.self, forKey: .cover)
+        pageCount = try container.decode(Int.self, forKey: .pageCount)
+        lastReadPage = try container.decode(Int.self, forKey: .lastReadPage)
+        lastReadPosition = try container.decode(Double.self, forKey: .lastReadPosition)
+        lastReadBlockId = try container.decodeIfPresent(Int.self, forKey: .lastReadBlockId) ?? 0
+        isMarkdown = try container.decodeIfPresent(Bool.self, forKey: .isMarkdown) ?? false
+        status = try container.decode(BookStatus.self, forKey: .status)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+    }
+
+    init(id: String, title: String, directory: String, cover: String?,
+         pageCount: Int, lastReadPage: Int, lastReadPosition: Double,
+         lastReadBlockId: Int = 0, isMarkdown: Bool = false,
+         status: BookStatus, createdAt: String) {
+        self.id = id
+        self.title = title
+        self.directory = directory
+        self.cover = cover
+        self.pageCount = pageCount
+        self.lastReadPage = lastReadPage
+        self.lastReadPosition = lastReadPosition
+        self.lastReadBlockId = lastReadBlockId
+        self.isMarkdown = isMarkdown
+        self.status = status
+        self.createdAt = createdAt
     }
 }
 

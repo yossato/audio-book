@@ -126,6 +126,10 @@ final class ReadingSettings {
 
     /// ブロックを読み上げるべきかどうか判定する
     func shouldRead(block: TextBlock) -> Bool {
+        // 画像・Mermaid ブロックは読み上げ不要
+        if block.markdownType == "image" || block.markdownType == "mermaid" {
+            return false
+        }
         // TYPE によるスキップ
         if skippedTypes.contains(block.type) {
             return false
