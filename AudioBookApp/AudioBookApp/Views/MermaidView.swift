@@ -106,6 +106,15 @@ private func makeMermaidWebViewConfig(coordinator: MermaidWebView.Coordinator) -
 // MARK: - Platform WebView wrapper
 
 #if os(macOS)
+/// スクロールイベントを親へ転送する WKWebView サブクラス（macOS 専用）
+/// これにより Mermaid 図の上でのスクロール操作が ScrollView に伝わる
+private class PassThroughWKWebView: WKWebView {
+    override func scrollWheel(with event: NSEvent) {
+        // WKWebView のスクロール処理をスキップし、親ビュー（NSScrollView）へ転送
+        nextResponder?.scrollWheel(with: event)
+    }
+}
+
 struct MermaidWebView: NSViewRepresentable {
     let code: String
     @Binding var renderedHeight: CGFloat
@@ -118,7 +127,7 @@ struct MermaidWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let config = makeMermaidWebViewConfig(coordinator: context.coordinator)
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = PassThroughWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
