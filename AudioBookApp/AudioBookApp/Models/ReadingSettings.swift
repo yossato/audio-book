@@ -107,7 +107,7 @@ final class ReadingSettings {
         }
         #if os(macOS)
         irodoriServerURL = UserDefaults.standard.string(forKey: irodoriServerURLKey) ?? "http://localhost:8000"
-        irodoriVenvPath = UserDefaults.standard.string(forKey: irodoriVenvPathKey) ?? ""
+        irodoriVenvPath = UserDefaults.standard.string(forKey: irodoriVenvPathKey) ?? "\(NSHomeDirectory())/Projects/audio-book/.venv"
         irodoriRefWavPath = UserDefaults.standard.string(forKey: irodoriRefWavPathKey) ?? ""
         #endif
     }

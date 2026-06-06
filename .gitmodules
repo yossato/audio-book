@@ -1,3 +1,6 @@
 [submodule "ndlocr-lite"]
 	path = ndlocr-lite
 	url = https://github.com/ndl-lab/ndlocr-lite.git
+[submodule "vendor/mlx-audio"]
+	path = vendor/mlx-audio
+	url = https://github.com/Blaizzy/mlx-audio.git

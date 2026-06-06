@@ -381,6 +381,9 @@ final class AudioPlayerManager: NSObject {
         irodoriPlayTask = Task { [weak self] in
             guard let self else { return }
             do {
+                if !IrodoriTTSService.shared.isServerAvailable {
+                    try await IrodoriTTSService.shared.startServer()
+                }
                 let chunk = self.irodoriChunks[index]
                 let wavURL = try await IrodoriTTSService.shared.generateAudio(text: chunk.text)
 

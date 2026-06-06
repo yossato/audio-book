@@ -46,7 +46,7 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 # --- 定数 ---
 DEFAULT_SERVER_URL = "http://localhost:8000"
-DEFAULT_MODEL = "mlx-community/Irodori-TTS-500M-v2-fp16"
+DEFAULT_MODEL = "mlx-community/Irodori-TTS-500M-v3-fp16"
 DEFAULT_SKIP_TYPES = {"割注", "キャプション", "柱", "ノンブル", "ルビ", "図版", "広告文字"}
 CHUNK_MIN = 60
 CHUNK_MAX = 200
@@ -238,7 +238,7 @@ def load_progress(audio_dir: Path) -> dict:
             return json.loads(progress_file.read_text(encoding="utf-8"))
         except Exception:
             pass
-    return {"last_completed_tts_page": 0, "last_completed_fa_page": 0, "phase": ""}
+    return {"last_completed_tts_page": -1, "last_completed_fa_page": -1, "phase": ""}
 
 
 def save_progress(audio_dir: Path, progress: dict):
@@ -263,6 +263,22 @@ def phase_tts(book: dict, book_path: Path, args) -> bool:
     total = len(pages)
 
     print(f"[INFO] TTS生成開始: {total}ページ (page {last_done + 1} から再開)")
+
+    # モデルを事前にロード（初回リクエストでタイムアウトしないよう）
+    print("[INFO] モデルウォームアップ中...")
+    warmup_ok = tts_generate(
+        text="テスト",
+        server_url=args.server_url,
+        model=args.model,
+        voice=args.voice,
+        ref_wav=args.ref_wav,
+        output_path=Path("/tmp/irodori_warmup.wav"),
+        timeout=600,
+    )
+    if not warmup_ok:
+        print("[ERROR] ウォームアップ失敗。サーバーが起動しているか確認してください。", file=sys.stderr)
+        return False
+    print("[INFO] ウォームアップ完了")
 
     for page in pages:
         if _interrupted:
@@ -306,6 +322,7 @@ def phase_tts(book: dict, book_path: Path, args) -> bool:
                 voice=args.voice,
                 ref_wav=args.ref_wav,
                 output_path=chunk_path,
+                timeout=600,
             ):
                 success = False
                 break

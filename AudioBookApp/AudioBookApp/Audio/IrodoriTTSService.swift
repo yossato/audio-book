@@ -50,8 +50,22 @@ final class IrodoriTTSService {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: pythonPath)
         process.arguments = ["-m", "mlx_audio.server", "--port", extractPort()]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        stdoutPipe.fileHandleForReading.readabilityHandler = { fh in
+            if let line = String(data: fh.availableData, encoding: .utf8), !line.isEmpty {
+                print("[IrodoriTTS:stdout] \(line)")
+            }
+        }
+        stderrPipe.fileHandleForReading.readabilityHandler = { fh in
+            if let line = String(data: fh.availableData, encoding: .utf8), !line.isEmpty {
+                print("[IrodoriTTS:stderr] \(line)")
+            }
+        }
 
         // 作業ディレクトリをユーザーのホームディレクトリに設定
         process.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
@@ -202,7 +216,7 @@ final class IrodoriTTSService {
 
         let refWavPath = ReadingSettings.shared.irodoriRefWavPath
         var body: [String: Any] = [
-            "model": "mlx-community/Irodori-TTS-500M-v2-fp16",
+            "model": "mlx-community/Irodori-TTS-500M-v3-fp16",
             "input": text,
             "response_format": "wav",
         ]

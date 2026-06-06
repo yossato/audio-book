@@ -33,6 +33,7 @@ struct ViewerView: View {
             audioManager.stop()
             #if os(macOS)
             IrodoriTTSService.shared.clearCache()
+            IrodoriTTSService.shared.stopServer()
             #endif
         }
     }
