@@ -800,3 +800,210 @@ Markdown ページ専用のリッチテキスト表示ビュー。
 | `Views/ViewerView.swift` | TabView スワイプ (iOS)、全画面トグル、pageContent() 抽出 |
 | `Views/PageImageView.swift` | optional bbox ガード、`onBackgroundTapped` コールバック追加 |
 | `Views/ZoomableContainer.swift` | 新規ファイル |
+
+---
+
+## Phase 11: Markdown レンダリング改善（テーブル・Mermaid・HR）✅ 完了
+
+### 背景
+
+iOS 実機で Markdown ファイルを開いた際に、以下の問題が発生していた:
+
+1. **テーブルが崩れた平文で表示される** — `MarkdownParser` でテーブルブロックを認識せず、`|` を含む行が段落として連結されていた
+2. **Mermaid 図がコードブロックとして表示される** — `WKWebView` に `<script src="mermaid.min.js">` を渡していたが、`loadHTMLString` + `nil` ベース URL のコンテキストではローカルファイル読み込みがクロスオリジン制約で無音失敗していた
+
+---
+
+### 1. テーブル・HR パース追加（`MarkdownParser.swift`）
+
+#### テーブル検出
+
+`|` で始まる行のかたまりをテーブルとして収集する:
+
+```swift
+if trimmed.hasPrefix("|") {
+    var tableLines: [String] = []
+    while i < lines.count && lines[i].trimmingCharacters(in: .whitespaces).hasPrefix("|") {
+        tableLines.append(...)
+        i += 1
+    }
+    // セパレータ行（|---|---| など）を除外してデータ行のみ保持
+    // TTS 用テキスト: セル内容を空白区切りで連結
+    blocks.append(TextBlock(..., markdownType: "table", rawMarkdown: rawTable))
+}
+```
+
+`rawMarkdown` にはセパレータ行を含む元の Markdown テキスト全体を保存（表示用）。  
+`text` には TTS 読み上げ用のプレーンテキスト（セル内容の連結）。
+
+#### HR 検出
+
+`---` / `***` / `___` を段落ループに入る前に検出:
+
+```swift
+if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+    blocks.append(TextBlock(id: id, text: "", type: "本文", markdownType: "hr"))
+}
+```
+
+段落の終端判定にも `|` / `---` / `***` / `___` を追加し、これらが段落に取り込まれないようにした。
+
+---
+
+### 2. テーブル・HR 表示追加（`PageMarkdownView.swift`）
+
+#### テーブルビュー
+
+```swift
+@ViewBuilder
+private func tableView(block: TextBlock) -> some View {
+    let rows = parseTableRows(block.rawMarkdown ?? "")
+    VStack(alignment: .leading, spacing: 0) {
+        ForEach(rows) { (rowIndex, row) in
+            HStack(spacing: 0) {
+                ForEach(row) { cell in
+                    // AttributedString でインライン Markdown をレンダリング
+                    Text(attributed).font(rowIndex == 0 ? .bold : .body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .background(rowIndex == 0 ? gray15% : zebra)
+                }
+            }
+            Divider()
+        }
+    }
+    .overlay(RoundedRectangle(cornerRadius: 4).stroke(gray30%, lineWidth: 1))
+    .clipShape(RoundedRectangle(cornerRadius: 4))
+}
+```
+
+- ヘッダー行（row 0）: 太字 + グレー背景
+- データ行: 偶数行に薄いゼブラ縞
+- セル: `AttributedString(markdown:)` でインライン Markdown（太字・斜体・リンク）をレンダリング
+- テーブル全体に角丸ボーダー
+
+#### HR ビュー
+
+```swift
+case "hr":
+    Divider().padding(.vertical, 4)
+```
+
+---
+
+### 3. Mermaid 完全リライト（`MermaidView.swift`）
+
+#### 根本原因: WKWebView のクロスオリジン制約
+
+`loadHTMLString(html, baseURL: nil)` で生成したページから `<script src="file:///...mermaid.min.js">` を読み込もうとすると、WKWebView はこれをクロスオリジンアクセスとして扱い、**エラーを `"Script error." at line 0`** として隠す（ブラウザのクロスオリジン情報漏洩防止仕様）。
+
+#### 解決策: `WKUserScript` インジェクション
+
+mermaid.js を `WKUserScript` として `atDocumentStart` でインジェクトすることで、クロスオリジン制約を完全に回避する:
+
+```swift
+private enum MermaidJS {
+    // バンドル内の mermaid.min.js を一度だけ読み込む（3.3MB、全インスタンスで共有）
+    static let source: String = {
+        guard let url = Bundle.main.url(forResource: "mermaid.min", withExtension: "js"),
+              let js = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+        return js
+    }()
+}
+
+func makeMermaidWebViewConfig(coordinator:) -> WKWebViewConfiguration {
+    let userController = WKUserContentController()
+    userController.add(coordinator, name: "mermaidBridge")
+    let script = WKUserScript(
+        source: MermaidJS.source,
+        injectionTime: .atDocumentStart,  // ← ページ実行前に注入
+        forMainFrameOnly: true
+    )
+    userController.addUserScript(script)
+    // ...
+}
+```
+
+HTML テンプレートには `<script src>` タグなし。mermaid.js はすでに注入済み。
+
+#### タイムアウト廃止・エラーメッセージ表示
+
+WKUserScript で注入した mermaid.js はローカル実行のため、ネットワーク遅延がない。Mermaid の `render()` Promise は成功または失敗を必ず返すため、タイムアウトは不要。
+
+代わりに JS エラーを Swift 側で受け取り、GitLab 風の 💣 表示:
+
+```swift
+// JS → Swift ブリッジ
+func userContentController(..., didReceive message: WKScriptMessage) {
+    guard let dict = message.body as? [String: Any] else { return }
+    if let error = dict["error"] as? String, !error.isEmpty {
+        // 構文エラー → エラーメッセージを表示
+        self.renderError = error
+        self.renderFailed = true
+    } else if let h = dict["height"] as? Double, h > 0 {
+        self.renderedHeight = CGFloat(h) + 24
+    }
+}
+```
+
+```swift
+// SwiftUI エラービュー
+private func mermaidErrorView(error: String) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+        HStack { Text("💣"); Text("Mermaid エラー").font(.caption.weight(.semibold)).foregroundStyle(.red) }
+        Text(error)
+            .font(.system(.caption, design: .monospaced))
+            .foregroundStyle(.red.opacity(0.85))
+            .background(Color.red.opacity(0.06))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.red.opacity(0.2)))
+    }
+}
+```
+
+#### SwiftUI 再レンダリングループ対策
+
+`@State` 変更（`renderedHeight` 更新）が親の再レンダリングを引き起こし、`updateNSView/updateUIView` が再度 `loadHTMLString` を呼び出す無限ループを防ぐため、`lastLoadedCode` ガード:
+
+```swift
+func updateNSView(_ webView: WKWebView, context: Context) {
+    guard context.coordinator.lastLoadedCode != code else { return }
+    context.coordinator.lastLoadedCode = code
+    webView.loadHTMLString(mermaidHTML(code: code), baseURL: nil)
+}
+```
+
+#### macOS スクロール転送
+
+macOS では `WKWebView` がスクロールイベントを捕捉し、親 `ScrollView` にスクロールが伝わらない問題を `PassThroughWKWebView` サブクラスで解決:
+
+```swift
+#if os(macOS)
+private class PassThroughWKWebView: WKWebView {
+    override func scrollWheel(with event: NSEvent) {
+        // WKWebView のスクロール処理をスキップして親（NSScrollView）へ転送
+        nextResponder?.scrollWheel(with: event)
+    }
+}
+#endif
+```
+
+#### Mermaid コードの安全な受け渡し
+
+JS インジェクション対策として、Mermaid コードを Base64 エンコードして HTML に埋め込み、JS 側で `TextDecoder("utf-8")` を使って UTF-8 として復元:
+
+```javascript
+const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0));
+const src = new TextDecoder("utf-8").decode(bytes);
+mermaid.render("mermaid-svg", src).then(result => { ... });
+```
+
+---
+
+### ファイル変更一覧
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `Models/MarkdownParser.swift` | テーブル・HR ブロック検出追加、段落終端判定を更新 |
+| `Views/PageMarkdownView.swift` | `tableView()` 追加、`"table"` / `"hr"` ケース追加、`parseTableRows()` ヘルパー追加 |
+| `Views/MermaidView.swift` | 完全リライト（WKUserScript 注入、エラー表示、スクロール転送、タイムアウト廃止） |
+| `Resources/mermaid.min.js` | バンドル済みローカルファイル（3.3MB、変更なし） |
